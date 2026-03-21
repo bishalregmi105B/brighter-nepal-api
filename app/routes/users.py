@@ -145,11 +145,10 @@ def shift_to_paid(uid: int):
     user.paid_amount = amount
 
     payment = Payment(
-        user_id  = user.id,
-        user_name= user.name,
-        amount   = amount,
-        method   = data.get('method', 'cash'),
-        status   = 'completed',
+        user_id = user.id,
+        amount  = amount,
+        method  = data.get('method', 'cash'),
+        status  = 'completed',
     )
     db.session.add(payment)
     db.session.commit()
