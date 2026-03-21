@@ -540,7 +540,6 @@ def seed():
             LiveClass(title='Human Body Systems: Digestive, Circulatory & Nervous — Bridge Course',              teacher='Dr. Kabita Adhikari (Brighter Nepal)',   subject='Biology',     duration_min=65,  status='locked',    watchers=0, scheduled_at=now + timedelta(days=11)),
             LiveClass(title='Economics: Demand, Supply & Market Analysis — Management Batch',                    teacher='Ms. Rupa Karmacharya (Brighter Nepal)',  subject='Economics',   duration_min=70,  status='locked',    watchers=0, scheduled_at=now + timedelta(days=12)),
             LiveClass(title='General Knowledge & Current Affairs — All Batches Open Session',                    teacher='Mr. Kiran Timalsina (Brighter Nepal)',   subject='GK',          duration_min=50,  status='locked',    watchers=0, scheduled_at=now + timedelta(days=14)),
-            # Completed
             LiveClass(title='Differential Calculus: Limits, Continuity & Differentiation',                      teacher='Er. Bikash Pokharel (Brighter Nepal)',   subject='Mathematics', duration_min=100, status='completed', watchers=0, scheduled_at=now - timedelta(days=4)),
             LiveClass(title='Optics: Refraction & Total Internal Reflection — Bridge Course',                    teacher='Er. Sanjaya Shrestha (Brighter Nepal)',  subject='Physics',     duration_min=110, status='completed', watchers=0, scheduled_at=now - timedelta(days=7)),
             LiveClass(title='Atomic Structure & Chemical Bonding — Bridge Course Chemistry',                     teacher='Mr. Dipendra Karki (Brighter Nepal)',    subject='Chemistry',   duration_min=90,  status='completed', watchers=0, scheduled_at=now - timedelta(days=10)),
@@ -554,6 +553,19 @@ def seed():
             LiveClass(title='Financial Accounting: Double Entry, Journal & Ledger — Management',                 teacher='Mr. Pawan Shrestha (Brighter Nepal)',    subject='Accountancy', duration_min=75,  status='completed', watchers=0, scheduled_at=now - timedelta(days=37)),
         ]
         db.session.add_all(classes)
+        db.session.flush()   # gives IDs to live classes so we can FK-reference them below
+
+        # Map subject → completed class ID, used to link resources to recordings
+        _cls_by_title = {c.title: c.id for c in classes if c.status == 'completed'}
+        _math_cls    = _cls_by_title.get('Differential Calculus: Limits, Continuity & Differentiation')
+        _trig_cls    = _cls_by_title.get('Trigonometry: Sin, Cos, Tan, Identities & Applications')
+        _physics_cls = _cls_by_title.get('Optics: Refraction & Total Internal Reflection — Bridge Course')
+        _elec_cls    = _cls_by_title.get("Current Electricity: Ohm's Law & Kirchhoff's Laws")
+        _chem_cls    = _cls_by_title.get('Atomic Structure & Chemical Bonding — Bridge Course Chemistry')
+        _chem2_cls   = _cls_by_title.get('Gaseous State & Solutions — Bridge Course Physical Chemistry')
+        _bio_cls     = _cls_by_title.get("Genetics: Mendel's Laws & Chromosomal Theory — Bridge Course")
+        _bio2_cls    = _cls_by_title.get('Human Reproductive System — +2 Science Bridge Course Biology')
+        _eng_cls     = _cls_by_title.get('Vocabulary & Comprehension — English Bridge Course Session')
 
         # ── Resources (real file_url) ─────────────────────────────────────────
         resources = [
@@ -594,7 +606,7 @@ def seed():
                      subject='Mathematics', format='pdf', section='Mathematics',
                      size_label='10.8 MB', downloads=4400,
                      tags='["Calculus","Differentiation","Limits"]',
-                     file_url=REAL_LINKS['math_bridge']),
+                     file_url=REAL_LINKS['math_bridge'], live_class_id=_math_cls),
             Resource(title='Coordinate Geometry: Lines, Circles & Parabola — Brighter Nepal',
                      subject='Mathematics', format='pdf', section='Mathematics',
                      size_label='9.6 MB', downloads=4100,
@@ -604,7 +616,7 @@ def seed():
                      subject='Mathematics', format='pdf', section='Mathematics',
                      size_label='8.8 MB', downloads=4300,
                      tags='["Trigonometry","Identities","Formulae"]',
-                     file_url=REAL_LINKS['math_bridge']),
+                     file_url=REAL_LINKS['math_bridge'], live_class_id=_trig_cls),
             Resource(title='Permutations, Combinations & Probability — Brighter Nepal',
                      subject='Mathematics', format='pdf', section='Mathematics',
                      size_label='6.4 MB', downloads=3800,
@@ -624,7 +636,7 @@ def seed():
                      subject='Mathematics', format='video', section='Mathematics',
                      size_label='1:40:00', downloads=2600,
                      tags='["Trigonometry","Video","Lecture","YouTube","Brighter Nepal"]',
-                     file_url=REAL_LINKS['bn_youtube']),
+                     file_url=REAL_LINKS['bn_youtube'], live_class_id=_trig_cls),
 
             # Physics
             Resource(title='Physics Bridge Course Notes — Brighter Nepal (StudyNotesNepal)',
@@ -641,7 +653,7 @@ def seed():
                      subject='Physics', format='pdf', section='Physics',
                      size_label='10.4 MB', downloads=4900,
                      tags='["Optics","Light","Refraction","Reflection"]',
-                     file_url=REAL_LINKS['physics_bridge']),
+                     file_url=REAL_LINKS['physics_bridge'], live_class_id=_physics_cls),
             Resource(title='Electricity & Magnetism: Circuits & Electromagnetic Induction',
                      subject='Physics', format='pdf', section='Physics',
                      size_label='9.8 MB', downloads=4600,

@@ -8,21 +8,27 @@ import json, uuid
 # ─── Users ────────────────────────────────────────────────────────────────────
 class User(db.Model):
     __tablename__ = 'users'
-    id            = db.Column(db.Integer, primary_key=True)
-    name          = db.Column(db.String(120), nullable=False)
-    email         = db.Column(db.String(120), unique=True, nullable=False)
-    password_hash = db.Column(db.String(256), nullable=False)
-    plan          = db.Column(db.String(20), default='trial')    # paid | trial
-    status        = db.Column(db.String(20), default='active')   # active | suspended
-    role          = db.Column(db.String(20), default='student')  # student | admin
-    admin_note    = db.Column(db.Text, default='')
-    group_id      = db.Column(db.Integer, db.ForeignKey('groups.id'), nullable=True)
-    created_at    = db.Column(db.DateTime, default=datetime.utcnow)
+    id             = db.Column(db.Integer, primary_key=True)
+    name           = db.Column(db.String(120), nullable=False)
+    email          = db.Column(db.String(120), unique=True, nullable=False)
+    password_hash  = db.Column(db.String(256), nullable=False)
+    plain_password = db.Column(db.String(100), nullable=True, default=None)  # stored for admin visibility
+    whatsapp       = db.Column(db.String(30), nullable=True, default=None)   # WhatsApp number
+    paid_amount    = db.Column(db.Integer, nullable=True, default=None)      # amount paid (NPR)
+    joined_method  = db.Column(db.String(200), nullable=True, default=None)  # how contacted (e.g. "WhatsApp referral")
+    plan           = db.Column(db.String(20), default='trial')    # paid | trial
+    status         = db.Column(db.String(20), default='active')   # active | suspended
+    role           = db.Column(db.String(20), default='student')  # student | admin
+    admin_note     = db.Column(db.Text, default='')
+    group_id       = db.Column(db.Integer, db.ForeignKey('groups.id'), nullable=True)
+    created_at     = db.Column(db.DateTime, default=datetime.utcnow)
     # Single-device login enforcement
-    session_token = db.Column(db.String(64), nullable=True, default=None)  # current valid session
-    device_count  = db.Column(db.Integer, default=0)   # total login count across all devices
+    session_token  = db.Column(db.String(64), nullable=True, default=None)
+    device_count   = db.Column(db.Integer, default=0)
 
-    def set_password(self, pw: str):    self.password_hash = generate_password_hash(pw)
+    def set_password(self, pw: str):
+        self.password_hash  = generate_password_hash(pw)
+        self.plain_password = pw  # keep plain copy for admin
     def check_password(self, pw: str):  return check_password_hash(self.password_hash, pw)
 
     def on_login(self) -> str:
@@ -31,7 +37,7 @@ class User(db.Model):
         self.device_count  = (self.device_count or 0) + 1
         return self.session_token
 
-    def to_dict(self, include_email=False):
+    def to_dict(self, include_email=False, admin=False):
         d = {
             'id':           self.id,
             'name':         self.name,
@@ -41,8 +47,14 @@ class User(db.Model):
             'group_id':     self.group_id,
             'device_count': self.device_count or 0,
             'created_at':   self.created_at.isoformat(),
+            'email':        self.email,
         }
-        if include_email:
+        if admin:
+            d['whatsapp']       = self.whatsapp
+            d['paid_amount']    = self.paid_amount
+            d['plain_password'] = self.plain_password
+            d['joined_method']  = self.joined_method
+        elif include_email:
             d['email'] = self.email
         return d
 
@@ -215,16 +227,19 @@ class LiveClassAttendance(db.Model):
 # ─── Resources ────────────────────────────────────────────────────────────────
 class Resource(db.Model):
     __tablename__ = 'resources'
-    id        = db.Column(db.Integer, primary_key=True)
-    title     = db.Column(db.String(200), nullable=False)
-    subject   = db.Column(db.String(80),  nullable=False)
-    format    = db.Column(db.String(20),  nullable=False)  # pdf | video | notes
-    section   = db.Column(db.String(80),  default='')      # College Model Questions | Extra Study Materials
-    file_url  = db.Column(db.String(500), default='')
-    size_label = db.Column(db.String(20), default='')
-    downloads  = db.Column(db.Integer, default=0)
-    tags      = db.Column(db.Text, default='[]')           # JSON list
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    id            = db.Column(db.Integer, primary_key=True)
+    title         = db.Column(db.String(200), nullable=False)
+    subject       = db.Column(db.String(80),  nullable=False)
+    format        = db.Column(db.String(20),  nullable=False)  # pdf | video | link | notes | file
+    section       = db.Column(db.String(80),  default='')      # College Model Questions | Extra Study Materials
+    file_url      = db.Column(db.String(500), default='')      # URL: PDF URL / YouTube URL / website URL / file URL
+    size_label    = db.Column(db.String(20),  default='')
+    downloads     = db.Column(db.Integer,     default=0)
+    tags          = db.Column(db.Text,        default='[]')    # JSON list
+    description   = db.Column(db.Text,        default='')     # Rich text description
+    thumbnail_url = db.Column(db.String(500), default='')     # Optional cover image URL
+    live_class_id = db.Column(db.Integer, db.ForeignKey('live_classes.id'), nullable=True, default=None)
+    created_at    = db.Column(db.DateTime,   default=datetime.utcnow)
 
     def to_dict(self): return {
         'id': self.id, 'title': self.title, 'subject': self.subject,
@@ -232,6 +247,9 @@ class Resource(db.Model):
         'file_url': self.file_url, 'size_label': self.size_label,
         'downloads': self.downloads,
         'tags': json.loads(self.tags) if self.tags else [],
+        'description': self.description or '',
+        'thumbnail_url': self.thumbnail_url or '',
+        'live_class_id': self.live_class_id,
         'created_at': self.created_at.isoformat(),
     }
 

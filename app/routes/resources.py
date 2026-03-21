@@ -13,11 +13,12 @@ resources_bp = Blueprint('resources', __name__)
 @resources_bp.get('')
 @jwt_required()
 def list_resources():
-    subject = request.args.get('subject', '')
-    fmt     = request.args.get('format', '')
-    section = request.args.get('section', '')
-    search  = request.args.get('search', '').strip()
-    page    = int(request.args.get('page', 1))
+    subject      = request.args.get('subject', '')
+    fmt          = request.args.get('format', '')
+    section      = request.args.get('section', '')
+    search       = request.args.get('search', '').strip()
+    live_class_id = request.args.get('live_class_id', type=int)
+    page         = int(request.args.get('page', 1))
 
     q = Resource.query
     if subject:
@@ -26,6 +27,8 @@ def list_resources():
         q = q.filter_by(format=fmt)
     if section:
         q = q.filter_by(section=section)
+    if live_class_id:
+        q = q.filter_by(live_class_id=live_class_id)
     if search:
         q = q.filter(Resource.title.ilike(f'%{search}%') | Resource.subject.ilike(f'%{search}%'))
     return paginate(q.order_by(Resource.created_at.desc()), page, 20)
@@ -52,6 +55,8 @@ def create_resource():
         file_url=data.get('file_url', ''),
         size_label=data.get('size_label', ''),
         tags=json.dumps(data.get('tags', [])),
+        description=data.get('description', ''),
+        thumbnail_url=data.get('thumbnail_url', ''),
     )
     db.session.add(res)
     db.session.commit()
@@ -65,7 +70,7 @@ def update_resource(rid: int):
     if not res:
         return not_found('Resource')
     data = request.get_json(silent=True) or {}
-    for f in ('title', 'subject', 'format', 'section', 'file_url', 'size_label'):
+    for f in ('title', 'subject', 'format', 'section', 'file_url', 'size_label', 'description', 'thumbnail_url'):
         if f in data:
             setattr(res, f, data[f])
     if 'tags' in data:
