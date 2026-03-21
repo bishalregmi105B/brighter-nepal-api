@@ -14,7 +14,7 @@ model_sets_bp = Blueprint('model_sets', __name__)
 @jwt_required()
 def list_targets():
     """Return distinct target exam values across all model sets, plus defaults."""
-    default_exams = ['IOE', 'IOM', 'CEE', 'CSIT', 'NEB']
+    default_exams = ['St. Xavier\'s', 'SOS', 'KMC', 'CCRC', 'NIST']
     rows = ModelSet.query.with_entities(ModelSet.targets).all()
     seen = set(default_exams)
     for (targets_str,) in rows:

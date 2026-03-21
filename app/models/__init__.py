@@ -299,7 +299,7 @@ class GroupMessage(db.Model):
     group_id   = db.Column(db.Integer, db.ForeignKey('groups.id'), nullable=False)
     user_id    = db.Column(db.Integer, db.ForeignKey('users.id'),  nullable=False)
     text       = db.Column(db.Text, default='')
-    image_url  = db.Column(db.String(500), default='')
+    image_url  = db.Column(db.Text, default='')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     sender     = db.relationship('User', foreign_keys=[user_id])
 
@@ -308,6 +308,28 @@ class GroupMessage(db.Model):
         'sender_name': self.sender.name if self.sender else 'Unknown',
         'text': self.text, 'image_url': self.image_url,
         'created_at': self.created_at.isoformat(),
+    }
+
+
+class LiveClassMessage(db.Model):
+    """Chat messages specific to a live class session."""
+    __tablename__ = 'live_class_messages'
+    id           = db.Column(db.Integer, primary_key=True)
+    class_id     = db.Column(db.Integer, db.ForeignKey('live_classes.id'), nullable=False)
+    user_id      = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    text         = db.Column(db.Text, default='')
+    image_url    = db.Column(db.Text, nullable=True)
+    created_at   = db.Column(db.DateTime, default=datetime.utcnow)
+    sender       = db.relationship('User', foreign_keys=[user_id])
+
+    def to_dict(self): return {
+        'id':          self.id,
+        'class_id':    self.class_id,
+        'user_id':     self.user_id,
+        'sender_name': self.sender.name if self.sender else 'Unknown',
+        'text':        self.text,
+        'image_url':   self.image_url,
+        'created_at':  self.created_at.isoformat(),
     }
 
 
