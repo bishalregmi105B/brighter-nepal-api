@@ -1,11 +1,11 @@
 """Model Sets Blueprint."""
+import json
 from flask import Blueprint, request
 from flask_jwt_extended import jwt_required
 from app import db
-from app.models import ModelSet, ModelSetAttempt
+from app.models import ModelSet, ModelSetAttempt, ModelSetQuestion, Question
 from app.utils.response import ok, error, created, not_found, paginate
 from app.utils.jwt_helper import admin_required, current_user_id
-import json
 
 model_sets_bp = Blueprint('model_sets', __name__)
 
@@ -49,7 +49,7 @@ def get_model_set(mid: int):
     ms = ModelSet.query.get(mid)
     if not ms:
         return not_found('Model Set')
-    return ok(ms.to_dict())
+    return ok(ms.to_dict(include_questions=True))
 
 
 @model_sets_bp.post('')
@@ -65,8 +65,31 @@ def create_model_set():
         targets=json.dumps(data.get('targets', ['IOE'])),
     )
     db.session.add(ms)
+    db.session.flush()
+    
+    for idx, q in enumerate(data.get('questions', [])):
+        if 'question_id' in q:
+            q_id = q['question_id']
+        else:
+            new_q = Question(
+                subject=q.get('subject', 'General'),
+                text=q.get('text', ''),
+                options=json.dumps(q.get('options', [])),
+                answer_index=q.get('answer_index', 0),
+            )
+            db.session.add(new_q)
+            db.session.flush()
+            q_id = new_q.id
+            
+        qobj = ModelSetQuestion(
+            model_set_id=ms.id,
+            question_id=q_id,
+            order_index=idx
+        )
+        db.session.add(qobj)
+    
     db.session.commit()
-    return created(ms.to_dict())
+    return created(ms.to_dict(include_questions=True))
 
 
 @model_sets_bp.patch('/<int:mid>')

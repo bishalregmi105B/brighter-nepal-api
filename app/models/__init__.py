@@ -58,14 +58,51 @@ class ModelSet(db.Model):
     status      = db.Column(db.String(20), default='published') # published | draft
     targets     = db.Column(db.String(200), default='IOE')      # JSON list stored as string
     created_at  = db.Column(db.DateTime, default=datetime.utcnow)
+    questions   = db.relationship('ModelSetQuestion', backref='model_set', lazy=True, cascade='all, delete-orphan')
     attempts    = db.relationship('ModelSetAttempt', backref='model_set', lazy=True)
 
+    def to_dict(self, include_questions=False):
+        d = {
+            'id': self.id, 'title': self.title, 'difficulty': self.difficulty,
+            'duration_min': self.duration_min, 'total_questions': self.total_questions,
+            'status': self.status, 'targets': json.loads(self.targets) if self.targets else [],
+            'question_count': len(self.questions),
+            'created_at': self.created_at.isoformat(),
+        }
+        if include_questions:
+            d['questions'] = [q.to_dict() for q in self.questions]
+        return d
+
+class Question(db.Model):
+    __tablename__ = 'questions'
+    id           = db.Column(db.Integer, primary_key=True)
+    subject      = db.Column(db.String(80), default='General')
+    text         = db.Column(db.Text, nullable=False)
+    options      = db.Column(db.Text, nullable=False)      # JSON list
+    answer_index = db.Column(db.Integer, nullable=False)
+    created_at   = db.Column(db.DateTime, default=datetime.utcnow)
+
     def to_dict(self): return {
-        'id': self.id, 'title': self.title, 'difficulty': self.difficulty,
-        'duration_min': self.duration_min, 'total_questions': self.total_questions,
-        'status': self.status, 'targets': json.loads(self.targets) if self.targets else [],
-        'created_at': self.created_at.isoformat(),
+        'id': self.id, 'subject': self.subject, 'text': self.text,
+        'options': json.loads(self.options),
+        'answer_index': self.answer_index,
     }
+
+
+class ModelSetQuestion(db.Model):
+    __tablename__ = 'model_set_questions'
+    id           = db.Column(db.Integer, primary_key=True)
+    model_set_id = db.Column(db.Integer, db.ForeignKey('model_sets.id'), nullable=False)
+    question_id  = db.Column(db.Integer, db.ForeignKey('questions.id'), nullable=False)
+    order_index  = db.Column(db.Integer, default=0)
+    
+    question     = db.relationship('Question', lazy='joined')
+
+    def to_dict(self):
+        # Merge question data to match the old schema output perfectly for the frontend
+        d = self.question.to_dict()
+        d['link_id'] = self.id
+        return d
 
 
 class ModelSetAttempt(db.Model):
@@ -115,15 +152,16 @@ class WeeklyTestQuestion(db.Model):
     __tablename__ = 'weekly_test_questions'
     id           = db.Column(db.Integer, primary_key=True)
     test_id      = db.Column(db.Integer, db.ForeignKey('weekly_tests.id'), nullable=False)
-    text         = db.Column(db.Text, nullable=False)
-    options      = db.Column(db.Text, nullable=False)      # JSON list
-    answer_index = db.Column(db.Integer, nullable=False)
+    question_id  = db.Column(db.Integer, db.ForeignKey('questions.id'), nullable=False)
+    order_index  = db.Column(db.Integer, default=0)
 
-    def to_dict(self): return {
-        'id': self.id, 'text': self.text,
-        'options': json.loads(self.options),
-        'answer_index': self.answer_index,
-    }
+    question     = db.relationship('Question', lazy='joined')
+
+    def to_dict(self):
+        # Merge question data to match the old schema output perfectly for the frontend
+        d = self.question.to_dict()
+        d['link_id'] = self.id
+        return d
 
 
 class WeeklyTestAttempt(db.Model):

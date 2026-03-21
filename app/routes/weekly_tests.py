@@ -1,15 +1,14 @@
 """Weekly Tests Blueprint."""
+import json
+from datetime import datetime
 from flask import Blueprint, request
 from flask_jwt_extended import jwt_required
 from app import db
-from app.models import WeeklyTest, WeeklyTestQuestion, WeeklyTestAttempt
+from app.models import WeeklyTest, WeeklyTestQuestion, WeeklyTestAttempt, Question
 from app.utils.response import ok, created, not_found, paginate
 from app.utils.jwt_helper import admin_required, current_user_id
-from datetime import datetime
-import json
 
 weekly_tests_bp = Blueprint('weekly_tests', __name__)
-
 
 @weekly_tests_bp.get('')
 @jwt_required()
@@ -44,12 +43,25 @@ def create_test():
     )
     db.session.add(test)
     db.session.flush()
-    for q in data.get('questions', []):
+    for idx, q in enumerate(data.get('questions', [])):
+        # Provide Question creation or linking
+        if 'question_id' in q:
+            q_id = q['question_id']
+        else:
+            new_q = Question(
+                subject=data.get('subject', 'General'),
+                text=q.get('text', ''),
+                options=json.dumps(q.get('options', [])),
+                answer_index=q.get('answer_index', 0),
+            )
+            db.session.add(new_q)
+            db.session.flush()
+            q_id = new_q.id
+            
         qobj = WeeklyTestQuestion(
             test_id=test.id,
-            text=q.get('text', ''),
-            options=json.dumps(q.get('options', [])),
-            answer_index=q.get('answer_index', 0),
+            question_id=q_id,
+            order_index=idx
         )
         db.session.add(qobj)
     db.session.commit()
