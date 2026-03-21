@@ -3,7 +3,7 @@ from flask import Blueprint, request
 from flask_jwt_extended import jwt_required
 from app import db
 from app.models import Group, GroupMessage, User
-from app.utils.response import ok, created, not_found, error
+from app.utils.response import ok, created, not_found, error, forbidden
 from app.utils.jwt_helper import admin_required, current_user_id
 
 groups_bp = Blueprint('groups', __name__)
@@ -22,9 +22,20 @@ def my_group():
     return ok(group.to_dict())
 
 
+def __check_group_access(gid: int) -> bool:
+    user = User.query.get(current_user_id())
+    if not user:
+        return False
+    if user.role == 'admin':
+        return True
+    return user.group_id == gid
+
+
 @groups_bp.get('/<int:gid>')
 @jwt_required()
 def get_group(gid: int):
+    if not __check_group_access(gid):
+        return forbidden()
     group = Group.query.get(gid)
     if not group:
         return not_found('Group')
@@ -34,6 +45,8 @@ def get_group(gid: int):
 @groups_bp.get('/<int:gid>/messages')
 @jwt_required()
 def get_messages(gid: int):
+    if not __check_group_access(gid):
+        return forbidden()
     limit  = int(request.args.get('limit', 30))
     before = request.args.get('before')   # message id cursor
     q = GroupMessage.query.filter_by(group_id=gid)
@@ -46,6 +59,8 @@ def get_messages(gid: int):
 @groups_bp.post('/<int:gid>/messages')
 @jwt_required()
 def send_message(gid: int):
+    if not __check_group_access(gid):
+        return forbidden()
     group = Group.query.get(gid)
     if not group:
         return not_found('Group')
@@ -63,6 +78,8 @@ def send_message(gid: int):
 @jwt_required()
 def send_image(gid: int):
     """Stores an image URL (client uploads to cloud, sends URL here)."""
+    if not __check_group_access(gid):
+        return forbidden()
     group = Group.query.get(gid)
     if not group:
         return not_found('Group')
