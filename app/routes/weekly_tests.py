@@ -39,6 +39,7 @@ def create_test():
         subject=data.get('subject', 'General'),
         duration_min=data.get('duration_min', 60),
         status=data.get('status', 'scheduled'),
+        forms_url=data.get('forms_url', None),
         scheduled_at=datetime.fromisoformat(data['scheduled_at']) if data.get('scheduled_at') else None,
     )
     db.session.add(test)
@@ -75,11 +76,11 @@ def update_test(tid: int):
     if not test:
         return not_found('Weekly Test')
     data = request.get_json(silent=True) or {}
-    for f in ('title', 'subject', 'duration_min', 'status'):
+    for f in ('title', 'subject', 'duration_min', 'status', 'forms_url'):
         if f in data:
             setattr(test, f, data[f])
     if 'scheduled_at' in data:
-        test.scheduled_at = datetime.fromisoformat(data['scheduled_at'])
+        test.scheduled_at = datetime.fromisoformat(data['scheduled_at']) if data['scheduled_at'] else None
     db.session.commit()
     return ok(test.to_dict(), 'Test updated')
 

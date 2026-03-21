@@ -1,4 +1,5 @@
 """Auth Blueprint — login, signup, me."""
+import re
 from flask import Blueprint, request
 from flask_jwt_extended import jwt_required
 from app import db
@@ -11,15 +12,23 @@ auth_bp = Blueprint('auth', __name__)
 
 @auth_bp.post('/login')
 def login():
-    data  = request.get_json(silent=True) or {}
-    email = data.get('email', '').strip().lower()
-    pw    = data.get('password', '')
-    user  = User.query.filter_by(email=email).first()
+    data       = request.get_json(silent=True) or {}
+    # Accept either 'identifier' (new) or legacy 'email' key
+    identifier = (data.get('identifier') or data.get('email') or '').strip()
+    pw         = data.get('password', '')
+
+    # BC-XXXX student ID login
+    bc_match = re.match(r'^BC?(\d+)$', identifier, re.IGNORECASE)
+    if bc_match:
+        uid  = int(bc_match.group(1))
+        user = User.query.get(uid)
+    else:
+        user = User.query.filter_by(email=identifier.lower()).first()
+
     if not user or not user.check_password(pw):
-        return error('Invalid email or password', 401)
+        return error('Invalid credentials', 401)
     if user.status == 'suspended':
         return error('Account suspended. Contact support.', 403)
-    # Rotate session token — invalidates all previously issued tokens
     session_token = user.on_login()
     db.session.commit()
     token = make_token(user.id, user.role, session_token)

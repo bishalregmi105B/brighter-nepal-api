@@ -10,6 +10,23 @@ from app.utils.jwt_helper import admin_required, current_user_id
 model_sets_bp = Blueprint('model_sets', __name__)
 
 
+@model_sets_bp.get('/targets')
+@jwt_required()
+def list_targets():
+    """Return distinct target exam values across all model sets, plus defaults."""
+    default_exams = ['IOE', 'IOM', 'CEE', 'CSIT', 'NEB']
+    rows = ModelSet.query.with_entities(ModelSet.targets).all()
+    seen = set(default_exams)
+    for (targets_str,) in rows:
+        try:
+            for exam in json.loads(targets_str or '[]'):
+                if exam:
+                    seen.add(exam.strip())
+        except Exception:
+            pass
+    return ok(sorted(seen))
+
+
 @model_sets_bp.get('')
 @jwt_required()
 def list_model_sets():
@@ -25,12 +42,8 @@ def list_model_sets():
     if status_filter != 'all':
         q = q.filter_by(status=status_filter)
 
-    if tab == 'ioe':
-        q = q.filter(ModelSet.targets.ilike('%IOE%'))
-    elif tab == 'iom':
-        q = q.filter(ModelSet.targets.ilike('%IOM%'))
-    elif tab == 'csit':
-        q = q.filter(ModelSet.targets.ilike('%CSIT%'))
+    if tab and tab != 'all':
+        q = q.filter(ModelSet.targets.ilike(f'%{tab.upper()}%'))
 
     if search:
         q = q.filter(ModelSet.title.ilike(f'%{search}%'))

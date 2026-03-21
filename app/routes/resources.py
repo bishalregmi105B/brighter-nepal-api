@@ -34,6 +34,16 @@ def list_resources():
     return paginate(q.order_by(Resource.created_at.desc()), page, 20)
 
 
+@resources_bp.get('/subjects')
+@jwt_required()
+def list_subjects():
+    """Return all distinct subjects that exist in the resources table."""
+    rows = db.session.query(Resource.subject).distinct().order_by(Resource.subject).all()
+    subjects = sorted({r[0] for r in rows if r[0]})
+    return ok(subjects)
+
+
+
 @resources_bp.get('/<int:rid>')
 @jwt_required()
 def get_resource(rid: int):

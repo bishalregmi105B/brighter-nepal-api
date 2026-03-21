@@ -143,6 +143,7 @@ class WeeklyTest(db.Model):
     duration_min = db.Column(db.Integer, default=60)
     scheduled_at = db.Column(db.DateTime, nullable=True)
     status       = db.Column(db.String(20), default='scheduled') # live | scheduled | completed
+    forms_url    = db.Column(db.String(500), nullable=True, default=None)  # Google Forms link
     created_at   = db.Column(db.DateTime, default=datetime.utcnow)
     questions    = db.relationship('WeeklyTestQuestion', backref='test', lazy=True, cascade='all, delete-orphan')
     attempts     = db.relationship('WeeklyTestAttempt',  backref='test', lazy=True)
@@ -153,6 +154,7 @@ class WeeklyTest(db.Model):
             'duration_min': self.duration_min, 'status': self.status,
             'scheduled_at': self.scheduled_at.isoformat() if self.scheduled_at else None,
             'question_count': len(self.questions),
+            'forms_url': self.forms_url or '',
             'created_at': self.created_at.isoformat(),
         }
         if include_questions:
@@ -325,4 +327,19 @@ class Payment(db.Model):
         'user_name': self.user.name if self.user else '',
         'amount': self.amount, 'method': self.method, 'status': self.status,
         'created_at': self.created_at.isoformat(),
+    }
+
+
+# ─── Contact Methods (admin-configurable dropdown options for joined_method) ─────
+class ContactMethod(db.Model):
+    __tablename__ = 'contact_methods'
+    id        = db.Column(db.Integer, primary_key=True)
+    name      = db.Column(db.String(100), nullable=False)   # e.g. "WhatsApp 1", "Messenger 1"
+    channel   = db.Column(db.String(30),  default='other')  # whatsapp | messenger | facebook | other
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self): return {
+        'id': self.id, 'name': self.name,
+        'channel': self.channel, 'is_active': self.is_active,
     }

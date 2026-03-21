@@ -93,6 +93,13 @@ def send_image(gid: int):
     return created(msg.to_dict())
 
 
+@groups_bp.get('')
+@admin_required
+def get_all_groups():
+    groups = Group.query.order_by(Group.created_at.desc()).all()
+    return ok({'items': [g.to_dict() for g in groups]})
+
+
 # Admin: assign a group to a student
 @groups_bp.post('')
 @admin_required

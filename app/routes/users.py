@@ -2,7 +2,7 @@
 from flask import Blueprint, request
 from flask_jwt_extended import jwt_required
 from app import db
-from app.models import User, Payment
+from app.models import User, Payment, ContactMethod
 from app.utils.response import ok, error, not_found, paginate
 from app.utils.jwt_helper import admin_required
 from datetime import datetime, date
@@ -80,10 +80,59 @@ def update_user(uid: int):
     for field in ('plan', 'status', 'admin_note', 'group_id', 'whatsapp', 'joined_method'):
         if field in data:
             setattr(user, field, data[field])
+    if 'paid_amount' in data and data['paid_amount'] is not None:
+        user.paid_amount = int(data['paid_amount'])
     if 'password' in data and data['password']:
         user.set_password(data['password'])
     db.session.commit()
     return ok(user.to_dict(admin=True), 'User updated')
+
+
+# ── Contact Methods CRUD ──────────────────────────────────────────────────────
+@users_bp.get('/contact-methods')
+@admin_required
+def list_contact_methods():
+    """List all active contact methods for the joined_via dropdown."""
+    methods = ContactMethod.query.filter_by(is_active=True).order_by(ContactMethod.name).all()
+    return ok([m.to_dict() for m in methods])
+
+
+@users_bp.post('/contact-methods')
+@admin_required
+def create_contact_method():
+    data = request.get_json(silent=True) or {}
+    if not data.get('name', '').strip():
+        return error('name is required')
+    m = ContactMethod(name=data['name'].strip(), channel=data.get('channel', 'other'))
+    db.session.add(m)
+    db.session.commit()
+    return ok(m.to_dict(), 'Contact method created')
+
+
+@users_bp.delete('/contact-methods/<int:mid>')
+@admin_required
+def delete_contact_method(mid: int):
+    m = ContactMethod.query.get(mid)
+    if not m:
+        return not_found('ContactMethod')
+    m.is_active = False      # soft-delete
+    db.session.commit()
+    return ok(message='Contact method removed')
+
+
+@users_bp.patch('/contact-methods/<int:mid>')
+@admin_required
+def update_contact_method(mid: int):
+    m = ContactMethod.query.get(mid)
+    if not m:
+        return not_found('ContactMethod')
+    data = request.get_json(silent=True) or {}
+    if 'name' in data:
+        m.name = data['name'].strip()
+    if 'channel' in data:
+        m.channel = data['channel']
+    db.session.commit()
+    return ok(m.to_dict(), 'Updated')
 
 
 @users_bp.get('/recent-activity')
@@ -169,20 +218,36 @@ def delete_user(uid: int):
 @users_bp.post('/bulk')
 @admin_required
 def bulk_create():
-    data  = request.get_json(silent=True) or {}
+    data       = request.get_json(silent=True) or {}
     users_data = data.get('users', [])
-    created_ids = []
+    created    = []
     for u in users_data:
-        if not u.get('email'):
+        name = (u.get('name') or '').strip()
+        if not name:
             continue
-        if User.query.filter_by(email=u['email'].lower()).first():
+        raw_email = (u.get('email') or '').strip().lower()
+        pw        = u.get('password') or 'Brighter@123'
+        # Skip if email given and already taken
+        if raw_email and User.query.filter_by(email=raw_email).first():
             continue
-        user = User(name=u.get('name', ''), email=u['email'].lower())
+        placeholder = f'pending_{id(u)}@placeholder.local'
+        user = User(name=name, email=raw_email or placeholder)
+        user.set_password(pw)
+        user.plan     = u.get('plan', 'trial')
         user.whatsapp = u.get('whatsapp')
-        user.set_password(u.get('password', 'Brighter@123'))
-        user.plan = u.get('plan', 'trial')
         db.session.add(user)
+        db.session.flush()   # get user.id
+        # Replace placeholder email with BC-based one if no real email given
+        if not raw_email:
+            user.email = f'bc{str(user.id).zfill(4)}@brighternepal.local'
         db.session.flush()
-        created_ids.append(user.id)
+        created.append({
+            'id':       user.id,
+            'bc_id':    f'BC-{str(user.id).zfill(4)}',
+            'name':     user.name,
+            'email':    user.email,
+            'password': pw,
+            'plan':     user.plan,
+        })
     db.session.commit()
-    return ok({'created': len(created_ids), 'ids': created_ids}, 'Bulk accounts created', 201)
+    return ok({'created': len(created), 'users': created}, 'Bulk accounts created', 201)
