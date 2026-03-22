@@ -40,6 +40,7 @@ def create_class():
         subject=data.get('subject', 'General'),
         duration_min=data.get('duration_min', 60),
         status=data.get('status', 'scheduled'),
+        stream_url=data.get('stream_url'),
         scheduled_at=datetime.fromisoformat(data['scheduled_at']) if data.get('scheduled_at') else None,
     )
     db.session.add(cls)
@@ -54,7 +55,7 @@ def update_class(cid: int):
     if not cls:
         return not_found('Live Class')
     data = request.get_json(silent=True) or {}
-    for f in ('title', 'teacher', 'subject', 'duration_min', 'status', 'watchers'):
+    for f in ('title', 'teacher', 'subject', 'duration_min', 'status', 'watchers', 'stream_url'):
         if f in data:
             setattr(cls, f, data[f])
     if 'scheduled_at' in data:

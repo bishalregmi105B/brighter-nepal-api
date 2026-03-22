@@ -37,6 +37,11 @@ def my_dashboard():
 
     # Current live class (if any)
     live_class = LiveClass.query.filter_by(status='live').first()
+    if not live_class:
+        live_class = LiveClass.query.filter(
+            LiveClass.status == 'upcoming',
+            LiveClass.scheduled_at != None
+        ).order_by(LiveClass.scheduled_at.asc()).first()
 
     return ok({
         'tests_appeared':   tests_count,
