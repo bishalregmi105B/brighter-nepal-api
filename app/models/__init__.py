@@ -205,6 +205,8 @@ class LiveClass(db.Model):
     scheduled_at = db.Column(db.DateTime, nullable=True)
     duration_min = db.Column(db.Integer, default=60)
     status       = db.Column(db.String(20), default='scheduled') # live | scheduled | completed | locked
+    stream_url   = db.Column(db.String(500), default='')
+    group_id     = db.Column(db.Integer, nullable=True)
     watchers     = db.Column(db.Integer, default=0)
     created_at   = db.Column(db.DateTime, default=datetime.utcnow)
     attendance   = db.relationship('LiveClassAttendance', backref='live_class', lazy=True)
@@ -213,6 +215,8 @@ class LiveClass(db.Model):
         'id': self.id, 'title': self.title, 'teacher': self.teacher,
         'subject': self.subject, 'duration_min': self.duration_min,
         'status': self.status, 'watchers': self.watchers,
+        'stream_url': self.stream_url,
+        'group_id': self.group_id,
         'scheduled_at': self.scheduled_at.isoformat() if self.scheduled_at else None,
         'created_at': self.created_at.isoformat(),
     }
