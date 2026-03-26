@@ -8,11 +8,31 @@ from app.utils.jwt_helper import admin_required
 from werkzeug.utils import secure_filename
 from pathlib import Path
 from uuid import uuid4
+import subprocess
 import json
 
 resources_bp = Blueprint('resources', __name__)
 UPLOAD_DIR = Path(__file__).resolve().parents[2] / 'uploads' / 'resources'
+THUMBNAIL_DIR = UPLOAD_DIR / 'thumbnails'
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+THUMBNAIL_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _generate_thumbnail(pdf_path: Path) -> str:
+    """Render the first PDF page to a PNG thumbnail and return the filename."""
+    stem = uuid4().hex
+    output_base = THUMBNAIL_DIR / stem
+    output_path = output_base.with_suffix('.png')
+
+    subprocess.run(
+        ['pdftoppm', '-f', '1', '-singlefile', '-png', '-scale-to', '900', str(pdf_path), str(output_base)],
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    if not output_path.exists():
+        raise FileNotFoundError('Thumbnail was not created')
+    return output_path.name
 
 
 @resources_bp.get('')
@@ -24,6 +44,7 @@ def list_resources():
     search       = request.args.get('search', '').strip()
     live_class_id = request.args.get('live_class_id', type=int)
     page         = int(request.args.get('page', 1))
+    per_page     = max(1, min(int(request.args.get('per_page', 20)), 200))
 
     q = Resource.query
     if subject:
@@ -36,7 +57,7 @@ def list_resources():
         q = q.filter_by(live_class_id=live_class_id)
     if search:
         q = q.filter(Resource.title.ilike(f'%{search}%') | Resource.subject.ilike(f'%{search}%'))
-    return paginate(q.order_by(Resource.created_at.desc()), page, 20)
+    return paginate(q.order_by(Resource.created_at.desc()), page, per_page)
 
 
 @resources_bp.get('/subjects')
@@ -95,6 +116,13 @@ def upload_pdf():
     target = UPLOAD_DIR / filename
     file.save(target)
     size_bytes = target.stat().st_size if target.exists() else 0
+    thumbnail_url = ''
+
+    try:
+        thumbnail_name = _generate_thumbnail(target)
+        thumbnail_url = f"{request.host_url.rstrip('/')}/api/resources/thumbnails/{thumbnail_name}"
+    except Exception:
+        thumbnail_url = ''
 
     file_url = f"{request.host_url.rstrip('/')}/api/resources/files/{filename}"
     return created({
@@ -102,6 +130,7 @@ def upload_pdf():
         'filename': filename,
         'original_name': original_name,
         'size_bytes': size_bytes,
+        'thumbnail_url': thumbnail_url,
     }, 'PDF uploaded')
 
 
@@ -115,6 +144,18 @@ def serve_uploaded_file(filename: str):
     if not path.exists() or not path.is_file():
         return not_found('File')
     return send_from_directory(str(UPLOAD_DIR), safe_name, mimetype='application/pdf', as_attachment=False, conditional=True)
+
+
+@resources_bp.get('/thumbnails/<path:filename>')
+def serve_uploaded_thumbnail(filename: str):
+    """Serve generated PDF thumbnails from local storage."""
+    safe_name = secure_filename(filename)
+    if not safe_name or safe_name != filename:
+        return not_found('File')
+    path = THUMBNAIL_DIR / safe_name
+    if not path.exists() or not path.is_file():
+        return not_found('File')
+    return send_from_directory(str(THUMBNAIL_DIR), safe_name, mimetype='image/png', as_attachment=False, conditional=True)
 
 
 @resources_bp.patch('/<int:rid>')
