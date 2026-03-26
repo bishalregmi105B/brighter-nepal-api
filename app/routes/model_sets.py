@@ -5,8 +5,16 @@ from flask_jwt_extended import jwt_required
 from app import db
 from app.models import ModelSet, ModelSetAttempt, ModelSetQuestion, Question
 from app.utils.response import ok, error, created, not_found, paginate
-from app.utils.jwt_helper import admin_required, current_user_id
+from app.utils.jwt_helper import admin_required, current_user_id, current_user_role
 from app.utils.cache_helper import cache_key_with_user
+from app.utils.google_forms import GoogleFormsError, parse_google_form_id
+from app.utils.google_forms_sync import (
+    build_internal_review_payload,
+    get_result_for_user,
+    import_google_form_questions,
+    reset_google_entity_state,
+    sync_google_form_results,
+)
 from app import cache
 
 model_sets_bp = Blueprint('model_sets', __name__)
@@ -62,12 +70,12 @@ def list_model_sets():
 
 @model_sets_bp.get('/<int:mid>')
 @jwt_required()
-@cache.cached(timeout=300)
+@cache.cached(timeout=300, make_cache_key=cache_key_with_user)
 def get_model_set(mid: int):
     ms = ModelSet.query.get(mid)
     if not ms:
         return not_found('Model Set')
-    return ok(ms.to_dict(include_questions=True))
+    return ok(ms.to_dict(include_questions=True, include_google=current_user_role() == 'admin'))
 
 
 @model_sets_bp.post('')
@@ -82,6 +90,8 @@ def create_model_set():
         status=data.get('status', 'draft'),
         targets=json.dumps(data.get('targets', ['IOE'])),
         forms_url=data.get('forms_url') or None,
+        google_match_mode=data.get('google_match_mode') or 'email_then_student_id',
+        google_student_id_question_id=data.get('google_student_id_question_id') or None,
     )
     db.session.add(ms)
     db.session.flush()
@@ -108,7 +118,8 @@ def create_model_set():
         db.session.add(qobj)
     
     db.session.commit()
-    return created(ms.to_dict(include_questions=True))
+    cache.clear()
+    return created(ms.to_dict(include_questions=True, include_google=True))
 
 
 @model_sets_bp.patch('/<int:mid>')
@@ -118,7 +129,8 @@ def update_model_set(mid: int):
     if not ms:
         return not_found('Model Set')
     data = request.get_json(silent=True) or {}
-    for field in ('title', 'difficulty', 'duration_min', 'total_questions', 'status', 'forms_url'):
+    previous_forms_url = ms.forms_url or ''
+    for field in ('title', 'difficulty', 'duration_min', 'total_questions', 'status', 'forms_url', 'google_match_mode', 'google_student_id_question_id'):
         if field in data:
             if field == 'forms_url':
                 setattr(ms, field, data[field] or None)
@@ -126,8 +138,19 @@ def update_model_set(mid: int):
                 setattr(ms, field, data[field])
     if 'targets' in data:
         ms.targets = json.dumps(data['targets'])
+    try:
+        previous_form_id = parse_google_form_id(previous_forms_url) if previous_forms_url else ''
+        next_form_id = parse_google_form_id(ms.forms_url) if ms.forms_url else ''
+    except GoogleFormsError:
+        previous_form_id = ''
+        next_form_id = ''
+    if previous_forms_url and previous_form_id != next_form_id:
+        reset_google_entity_state('model_set', ms)
+    if not ms.forms_url:
+        ms.google_student_id_question_id = None
     db.session.commit()
-    return ok(ms.to_dict(), 'Model Set updated')
+    cache.clear()
+    return ok(ms.to_dict(include_questions=True, include_google=True), 'Model Set updated')
 
 
 @model_sets_bp.delete('/<int:mid>')
@@ -138,6 +161,7 @@ def delete_model_set(mid: int):
         return not_found('Model Set')
     db.session.delete(ms)
     db.session.commit()
+    cache.clear()
     return ok(message='Model Set deleted')
 
 
@@ -148,12 +172,15 @@ def submit_attempt(mid: int):
     if not ms:
         return not_found('Model Set')
     data = request.get_json(silent=True) or {}
+    answers = data.get('answers', [])
     attempt = ModelSetAttempt(
         user_id=current_user_id(),
         model_set_id=mid,
         score=data.get('score', 0),
         total=data.get('total', ms.total_questions),
-        answers=json.dumps(data.get('answers', [])),
+        answers=json.dumps(answers),
+        source='internal',
+        review_payload=json.dumps(build_internal_review_payload(ms, answers)),
     )
     db.session.add(attempt)
     db.session.commit()
@@ -168,3 +195,48 @@ def my_attempts(mid: int):
         user_id=current_user_id(), model_set_id=mid
     ).order_by(ModelSetAttempt.completed_at.desc()).all()
     return ok([a.to_dict() for a in attempts])
+
+
+@model_sets_bp.post('/<int:mid>/google/import-questions')
+@admin_required
+def import_google_questions(mid: int):
+    ms = ModelSet.query.get(mid)
+    if not ms:
+        return not_found('Model Set')
+    try:
+        summary = import_google_form_questions('model_set', ms)
+    except GoogleFormsError as err:
+        db.session.rollback()
+        return error(str(err))
+    cache.clear()
+    return ok({
+        'item': ms.to_dict(include_questions=True, include_google=True),
+        'summary': summary,
+    }, 'Google Form questions imported')
+
+
+@model_sets_bp.post('/<int:mid>/google/sync-results')
+@admin_required
+def sync_google_results(mid: int):
+    ms = ModelSet.query.get(mid)
+    if not ms:
+        return not_found('Model Set')
+    try:
+        summary = sync_google_form_results('model_set', ms)
+    except GoogleFormsError as err:
+        db.session.rollback()
+        return error(str(err))
+    cache.clear()
+    return ok({
+        'item': ms.to_dict(include_questions=True, include_google=True),
+        'summary': summary,
+    }, 'Google Form results synced')
+
+
+@model_sets_bp.get('/<int:mid>/results/me')
+@jwt_required()
+def my_result(mid: int):
+    ms = ModelSet.query.get(mid)
+    if not ms:
+        return not_found('Model Set')
+    return ok(get_result_for_user('model_set', ms, current_user_id()))

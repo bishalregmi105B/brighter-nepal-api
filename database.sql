@@ -155,6 +155,14 @@ CREATE TABLE IF NOT EXISTS payments (
     created_at TEXT DEFAULT (datetime('now'))
 );
 
+-- Platform settings (admin-managed secrets and feature configuration)
+CREATE TABLE IF NOT EXISTS platform_settings (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    key        TEXT NOT NULL UNIQUE,
+    value      TEXT DEFAULT '',
+    updated_at TEXT DEFAULT (datetime('now'))
+);
+
 -- ── Demo INSERT rows ────────────────────────────────────────────────────────
 
 -- Groups

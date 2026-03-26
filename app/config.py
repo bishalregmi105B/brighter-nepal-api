@@ -31,3 +31,9 @@ class Config:
     CACHE_TYPE = 'RedisCache' if USE_REDIS_CACHE else 'NullCache'
     CACHE_REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
     CACHE_DEFAULT_TIMEOUT = int(os.getenv('CACHE_TIMEOUT', '300')) # 5 mins
+
+    GOOGLE_FORMS_CLIENT_ID = os.getenv('GOOGLE_FORMS_CLIENT_ID', '')
+    GOOGLE_FORMS_CLIENT_SECRET = os.getenv('GOOGLE_FORMS_CLIENT_SECRET', '')
+    GOOGLE_FORMS_CLIENT_SECRET_FILE = os.getenv('GOOGLE_FORMS_CLIENT_SECRET_FILE', '')
+    GOOGLE_FORMS_REFRESH_TOKEN = os.getenv('GOOGLE_FORMS_REFRESH_TOKEN', '')
+    URL_CIPHER_KEY = os.getenv('URL_CIPHER_KEY', 'bn-url-cipher-v1')

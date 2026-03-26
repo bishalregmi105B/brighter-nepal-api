@@ -36,9 +36,31 @@ def _ensure_legacy_columns(app: Flask) -> None:
         },
         'model_sets': {
             'forms_url': 'TEXT',
+            "google_match_mode": "TEXT DEFAULT 'email_then_student_id'",
+            'google_student_id_question_id': 'TEXT',
+            'google_questions_last_imported_at': 'DATETIME',
+            'google_results_last_synced_at': 'DATETIME',
+            "google_last_sync_summary": "TEXT DEFAULT '{}'",
         },
         'weekly_tests': {
             'forms_url': 'TEXT',
+            "google_match_mode": "TEXT DEFAULT 'email_then_student_id'",
+            'google_student_id_question_id': 'TEXT',
+            'google_questions_last_imported_at': 'DATETIME',
+            'google_results_last_synced_at': 'DATETIME',
+            "google_last_sync_summary": "TEXT DEFAULT '{}'",
+        },
+        'model_set_attempts': {
+            "source": "TEXT DEFAULT 'internal'",
+            'external_response_id': 'TEXT',
+            'matched_by': 'TEXT',
+            "review_payload": "TEXT DEFAULT '[]'",
+        },
+        'weekly_test_attempts': {
+            "source": "TEXT DEFAULT 'internal'",
+            'external_response_id': 'TEXT',
+            'matched_by': 'TEXT',
+            "review_payload": "TEXT DEFAULT '[]'",
         },
         'live_classes': {
             'stream_url': 'TEXT',
@@ -66,6 +88,11 @@ def _ensure_legacy_columns(app: Flask) -> None:
             conn.execute(text('CREATE UNIQUE INDEX IF NOT EXISTS ix_users_student_id ON users(student_id)'))
         except Exception as err:
             app.logger.warning('Could not ensure index ix_users_student_id (%s)', err)
+        try:
+            conn.execute(text('CREATE INDEX IF NOT EXISTS ix_model_set_attempts_external_response_id ON model_set_attempts(external_response_id)'))
+            conn.execute(text('CREATE INDEX IF NOT EXISTS ix_weekly_test_attempts_external_response_id ON weekly_test_attempts(external_response_id)'))
+        except Exception as err:
+            app.logger.warning('Could not ensure Google attempt indexes (%s)', err)
 
 def _ensure_user_defaults(app: Flask) -> None:
     """
@@ -160,6 +187,8 @@ def create_app(config_class: type = Config) -> Flask:
     from app.routes.groups       import groups_bp
     from app.routes.payments     import payments_bp
     from app.routes.dashboard    import dashboard_bp
+    from app.routes.subjects     import subjects_bp
+    from app.routes.settings     import settings_bp
 
     app.register_blueprint(auth_bp,         url_prefix='/api/auth')
     app.register_blueprint(users_bp,        url_prefix='/api/users')
@@ -171,6 +200,8 @@ def create_app(config_class: type = Config) -> Flask:
     app.register_blueprint(groups_bp,       url_prefix='/api/groups')
     app.register_blueprint(payments_bp,     url_prefix='/api/payments')
     app.register_blueprint(dashboard_bp,    url_prefix='/api/dashboard')
+    app.register_blueprint(subjects_bp,     url_prefix='/api/subjects')
+    app.register_blueprint(settings_bp,     url_prefix='/api/settings')
 
     # Health check
     @app.get('/api/health')

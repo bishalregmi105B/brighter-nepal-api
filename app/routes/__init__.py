@@ -9,9 +9,11 @@ from app.routes.notices      import notices_bp
 from app.routes.groups       import groups_bp
 from app.routes.payments     import payments_bp
 from app.routes.dashboard    import dashboard_bp
+from app.routes.settings     import settings_bp
 
 __all__ = [
     'auth_bp', 'users_bp', 'model_sets_bp', 'weekly_tests_bp',
     'live_classes_bp', 'resources_bp', 'notices_bp',
     'groups_bp', 'payments_bp', 'dashboard_bp',
+    'settings_bp',
 ]

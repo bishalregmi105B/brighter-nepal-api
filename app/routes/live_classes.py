@@ -8,6 +8,7 @@ from app.utils.jwt_helper import admin_required, current_user_id
 from app.utils.cache_helper import cache_key_with_user
 from app import cache
 from datetime import datetime
+from sqlalchemy import case
 
 live_classes_bp = Blueprint('live_classes', __name__)
 
@@ -20,8 +21,21 @@ def list_classes():
     page   = int(request.args.get('page', 1))
     q = LiveClass.query
     if status:
-        q = q.filter_by(status=status)
-    return paginate(q.order_by(LiveClass.scheduled_at.desc()), page, 20)
+        if status == 'upcoming':
+            q = q.filter(LiveClass.status.in_(['scheduled', 'upcoming']))
+        else:
+            q = q.filter_by(status=status)
+    return paginate(q.order_by(
+        case(
+            (LiveClass.status == 'live', 0),
+            (LiveClass.status.in_(['scheduled', 'upcoming']), 1),
+            (LiveClass.status == 'completed', 2),
+            else_=3,
+        ),
+        LiveClass.created_at.desc(),
+        LiveClass.scheduled_at.desc(),
+        LiveClass.id.desc(),
+    ), page, 20)
 
 
 @live_classes_bp.get('/<int:cid>')
@@ -49,6 +63,7 @@ def create_class():
     )
     db.session.add(cls)
     db.session.commit()
+    cache.clear()
     return created(cls.to_dict())
 
 
@@ -63,8 +78,9 @@ def update_class(cid: int):
         if f in data:
             setattr(cls, f, data[f])
     if 'scheduled_at' in data:
-        cls.scheduled_at = datetime.fromisoformat(data['scheduled_at'])
+        cls.scheduled_at = datetime.fromisoformat(data['scheduled_at']) if data['scheduled_at'] else None
     db.session.commit()
+    cache.clear()
     return ok(cls.to_dict(), 'Live class updated')
 
 
@@ -82,6 +98,7 @@ def join_class(cid: int):
         cls.watchers = (cls.watchers or 0) + 1
         db.session.add(attendance)
         db.session.commit()
+        cache.clear()
     return ok({'class_id': cid, 'joined': True})
 
 

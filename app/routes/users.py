@@ -1,5 +1,5 @@
 """Users Blueprint — admin CRUD for user accounts."""
-from flask import Blueprint, request
+from flask import Blueprint, Response, request
 from flask_jwt_extended import jwt_required
 from app import db
 from app.models import User, Payment, ContactMethod, Group
@@ -8,6 +8,8 @@ from app.utils.jwt_helper import admin_required
 from app.utils.student_id import generate_unique_student_id
 from app import cache
 from datetime import datetime, date
+import csv
+import io
 
 users_bp = Blueprint('users', __name__)
 
@@ -35,6 +37,94 @@ def list_users():
         'page':  page,
         'pages': max(1, -(-total // limit)),   # ceil division
     })
+
+
+@users_bp.get('/export')
+@admin_required
+def export_users_csv():
+    """Export filtered users as CSV for admin download."""
+    tab = request.args.get('tab', 'all')
+    search = request.args.get('search', '').strip()
+
+    q = User.query.filter(User.role != 'admin')
+    if tab in ('paid', 'trial'):
+        q = q.filter_by(plan=tab)
+    if search:
+        like = f'%{search}%'
+        q = q.filter(
+            User.name.ilike(like)
+            | User.email.ilike(like)
+            | User.student_id.ilike(like)
+            | User.joined_method.ilike(like)
+        )
+
+    users = q.order_by(User.created_at.desc()).all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        'BC ID',
+        'Student ID',
+        'Name',
+        'Email',
+        'WhatsApp',
+        'Joined Via',
+        'Plan',
+        'Status',
+        'Paid Amount (NPR)',
+        'Group',
+        'Onboarding Completed',
+        'Joined Date',
+        'Previous School',
+        'Location',
+        'Stream',
+        'Heard From',
+        'Target Exams',
+    ])
+
+    for user in users:
+        user_data = user.to_dict(admin=True)
+        onboarding_data = user_data.get('onboarding_data') or {}
+        if not isinstance(onboarding_data, dict):
+            onboarding_data = {}
+        target_exams = onboarding_data.get('target_exams') or []
+        if isinstance(target_exams, list):
+            target_exams_value = ', '.join(str(x) for x in target_exams if str(x).strip())
+        else:
+            target_exams_value = str(target_exams)
+
+        writer.writerow([
+            f"BC{user_data.get('student_id') or str(user.id).zfill(6)}",
+            user_data.get('student_id') or '',
+            user_data.get('name') or '',
+            user_data.get('email') or '',
+            user_data.get('whatsapp') or '',
+            user_data.get('joined_method') or '',
+            user_data.get('plan') or '',
+            user_data.get('status') or '',
+            user_data.get('paid_amount') or '',
+            user.group.name if user.group else '',
+            'Yes' if user_data.get('onboarding_completed') else 'No',
+            (user_data.get('created_at') or '')[:10],
+            onboarding_data.get('previous_school') or '',
+            onboarding_data.get('location') or '',
+            onboarding_data.get('stream') or '',
+            onboarding_data.get('heard_from') or '',
+            target_exams_value,
+        ])
+
+    csv_data = '\ufeff' + output.getvalue()  # UTF-8 BOM for Excel compatibility
+    output.close()
+
+    scope = tab if tab in ('paid', 'trial') else 'all'
+    stamp = datetime.utcnow().strftime('%Y%m%d')
+    filename = f'users_{scope}_{stamp}.csv'
+
+    return Response(
+        csv_data,
+        mimetype='text/csv; charset=utf-8',
+        headers={'Content-Disposition': f'attachment; filename="{filename}"'},
+    )
 
 
 @users_bp.get('/stats')

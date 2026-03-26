@@ -2,9 +2,10 @@
 from flask import Blueprint, request, send_from_directory
 from flask_jwt_extended import jwt_required
 from app import db
-from app.models import Resource
+from app.models import Resource, LiveClass
 from app.utils.response import ok, created, not_found, paginate, error
 from app.utils.jwt_helper import admin_required
+from app.utils.url_cipher import encrypt_url
 from app import cache
 from werkzeug.utils import secure_filename
 from pathlib import Path
@@ -17,6 +18,18 @@ UPLOAD_DIR = Path(__file__).resolve().parents[2] / 'uploads' / 'resources'
 THUMBNAIL_DIR = UPLOAD_DIR / 'thumbnails'
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 THUMBNAIL_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _parse_live_class_id(raw_value):
+    if raw_value in (None, '', 'null'):
+        return None
+    try:
+        live_class_id = int(raw_value)
+    except (TypeError, ValueError):
+        raise ValueError('Invalid live_class_id')
+    if live_class_id <= 0:
+        raise ValueError('Invalid live_class_id')
+    return live_class_id
 
 
 def _generate_thumbnail(pdf_path: Path) -> str:
@@ -87,6 +100,14 @@ def get_resource(rid: int):
 @admin_required
 def create_resource():
     data = request.get_json(silent=True) or {}
+    try:
+        live_class_id = _parse_live_class_id(data.get('live_class_id'))
+    except ValueError:
+        return error('Invalid linked lecture')
+
+    if live_class_id is not None and not LiveClass.query.get(live_class_id):
+        return error('Linked lecture not found', 404)
+
     res = Resource(
         title=data.get('title', 'Untitled'),
         subject=data.get('subject', 'General'),
@@ -97,9 +118,11 @@ def create_resource():
         tags=json.dumps(data.get('tags', [])),
         description=data.get('description', ''),
         thumbnail_url=data.get('thumbnail_url', ''),
+        live_class_id=live_class_id,
     )
     db.session.add(res)
     db.session.commit()
+    cache.clear()
     return created(res.to_dict())
 
 
@@ -169,12 +192,21 @@ def update_resource(rid: int):
     if not res:
         return not_found('Resource')
     data = request.get_json(silent=True) or {}
+    if 'live_class_id' in data:
+        try:
+            live_class_id = _parse_live_class_id(data.get('live_class_id'))
+        except ValueError:
+            return error('Invalid linked lecture')
+        if live_class_id is not None and not LiveClass.query.get(live_class_id):
+            return error('Linked lecture not found', 404)
+        res.live_class_id = live_class_id
     for f in ('title', 'subject', 'format', 'section', 'file_url', 'size_label', 'description', 'thumbnail_url'):
         if f in data:
             setattr(res, f, data[f])
     if 'tags' in data:
         res.tags = json.dumps(data['tags'])
     db.session.commit()
+    cache.clear()
     return ok(res.to_dict(), 'Resource updated')
 
 
@@ -186,6 +218,7 @@ def delete_resource(rid: int):
         return not_found('Resource')
     db.session.delete(res)
     db.session.commit()
+    cache.clear()
     return ok(message='Resource deleted')
 
 
@@ -197,4 +230,4 @@ def log_download(rid: int):
         return not_found('Resource')
     res.downloads += 1
     db.session.commit()
-    return ok({'file_url': res.file_url, 'downloads': res.downloads})
+    return ok({'file_url': encrypt_url(res.file_url), 'downloads': res.downloads})
