@@ -6,6 +6,7 @@ from app.models import User, Payment, ContactMethod, Group
 from app.utils.response import ok, error, not_found, paginate
 from app.utils.jwt_helper import admin_required
 from app.utils.student_id import generate_unique_student_id
+from app import cache
 from datetime import datetime, date
 
 users_bp = Blueprint('users', __name__)
@@ -13,6 +14,7 @@ users_bp = Blueprint('users', __name__)
 
 @users_bp.get('')
 @admin_required
+@cache.cached(timeout=60, query_string=True)
 def list_users():
     tab    = request.args.get('tab', 'all')       # all | paid | trial
     search = request.args.get('search', '').strip()
@@ -37,33 +39,43 @@ def list_users():
 
 @users_bp.get('/stats')
 @admin_required
+@cache.cached(timeout=60)
 def get_stats():
-    """Returns quick stats for the admin dashboard."""
-    total_users  = User.query.filter(User.role != 'admin').count()
-    paid_users   = User.query.filter_by(plan='paid').count()
-    trial_users  = User.query.filter_by(plan='trial').count()
+    """Returns quick stats for the admin dashboard.
+    Uses a single-pass aggregation over the users table instead of 4 separate COUNTs.
+    """
+    from sqlalchemy import case as sa_case
+    today_start = datetime.combine(date.today(), datetime.min.time())
 
-    today_start  = datetime.combine(date.today(), datetime.min.time())
-    today_enroll = User.query.filter(User.created_at >= today_start).count()
+    # Single query: aggregate all user counts in one DB round-trip
+    row = db.session.query(
+        db.func.count(db.case((User.role != 'admin', 1))).label('total'),
+        db.func.count(db.case((db.and_(User.role != 'admin', User.plan == 'paid'), 1))).label('paid'),
+        db.func.count(db.case((db.and_(User.role != 'admin', User.plan == 'trial'), 1))).label('trial'),
+        db.func.count(db.case((User.created_at >= today_start, 1))).label('today_enroll'),
+    ).one()
 
-    total_payment = db.session.query(db.func.sum(Payment.amount)).filter_by(status='completed').scalar() or 0
-    today_payment = db.session.query(db.func.sum(Payment.amount)).filter(
-        Payment.status == 'completed',
-        Payment.created_at >= today_start
-    ).scalar() or 0
+    # Single aggregated payment query
+    pay_row = db.session.query(
+        db.func.sum(db.case((Payment.status == 'completed', Payment.amount), else_=0)).label('total'),
+        db.func.sum(db.case((
+            db.and_(Payment.status == 'completed', Payment.created_at >= today_start),
+            Payment.amount), else_=0)).label('today'),
+    ).one()
 
     return ok({
-        'total_users':    total_users,
-        'paid_users':     paid_users,
-        'trial_users':    trial_users,
-        'total_payment':  int(total_payment),
-        'today_payment':  int(today_payment),
-        'today_enroll':   today_enroll,
+        'total_users':   row.total or 0,
+        'paid_users':    row.paid or 0,
+        'trial_users':   row.trial or 0,
+        'today_enroll':  row.today_enroll or 0,
+        'total_payment': int(pay_row.total or 0),
+        'today_payment': int(pay_row.today or 0),
     })
 
 
 @users_bp.get('/<int:uid>')
 @admin_required
+@cache.cached(timeout=60)
 def get_user(uid: int):
     user = User.query.get(uid)
     if not user:
@@ -116,6 +128,7 @@ def update_user(uid: int):
 # ── Contact Methods CRUD ──────────────────────────────────────────────────────
 @users_bp.get('/contact-methods')
 @admin_required
+@cache.cached(timeout=300)
 def list_contact_methods():
     """List all active contact methods for the joined_via dropdown."""
     methods = ContactMethod.query.filter_by(is_active=True).order_by(ContactMethod.name).all()
@@ -165,6 +178,7 @@ def update_contact_method(mid: int):
 
 @users_bp.get('/recent-activity')
 @admin_required
+@cache.cached(timeout=60)
 def recent_activity():
     """Returns the 10 most recent exam attempts (model sets + weekly tests) for the activity feed."""
     from app.models import ModelSetAttempt, WeeklyTestAttempt, ModelSet, WeeklyTest

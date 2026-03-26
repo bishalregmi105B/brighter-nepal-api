@@ -3,12 +3,14 @@ from flask import Blueprint, request
 from app.models import Payment
 from app.utils.response import not_found, paginate, ok
 from app.utils.jwt_helper import admin_required
+from app import cache
 
 payments_bp = Blueprint('payments', __name__)
 
 
 @payments_bp.get('')
 @admin_required
+@cache.cached(timeout=60, query_string=True)
 def list_payments():
     status = request.args.get('status', '')
     search = request.args.get('search', '').strip()
@@ -26,6 +28,7 @@ def list_payments():
 
 @payments_bp.get('/<int:pid>')
 @admin_required
+@cache.cached(timeout=60)
 def get_payment(pid: int):
     payment = Payment.query.get(pid)
     if not payment:

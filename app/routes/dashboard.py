@@ -4,6 +4,8 @@ from flask import Blueprint
 from app.models import WeeklyTestAttempt, LiveClassAttendance, LiveClass
 from app.utils.response import ok
 from app.utils.jwt_helper import current_user_id
+from app.utils.cache_helper import cache_key_with_user
+from app import cache
 from datetime import datetime, timedelta
 
 dashboard_bp = Blueprint('dashboard', __name__)
@@ -11,6 +13,7 @@ dashboard_bp = Blueprint('dashboard', __name__)
 
 @dashboard_bp.get('/me')
 @jwt_required()
+@cache.cached(timeout=300, make_cache_key=cache_key_with_user)
 def my_dashboard():
     uid = current_user_id()
 

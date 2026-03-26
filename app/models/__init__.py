@@ -8,6 +8,15 @@ import json, uuid
 # ─── Users ────────────────────────────────────────────────────────────────────
 class User(db.Model):
     __tablename__ = 'users'
+    __table_args__ = (
+        # Composite index for the most common admin list query: filter by role + plan/status
+        db.Index('ix_users_role_plan',   'role', 'plan'),
+        db.Index('ix_users_role_status', 'role', 'status'),
+        # For group membership lookups (chat and dashboard)
+        db.Index('ix_users_group_id',    'group_id'),
+        # For sort-by-date on admin list
+        db.Index('ix_users_created_at',  'created_at'),
+    )
     id             = db.Column(db.Integer, primary_key=True)
     student_id     = db.Column(db.String(6), unique=True, nullable=True, default=None)  # 6-digit login ID
     name           = db.Column(db.String(120), nullable=False)
@@ -323,6 +332,9 @@ class Group(db.Model):
 
 class GroupMessage(db.Model):
     __tablename__ = 'group_messages'
+    __table_args__ = (
+        db.Index('ix_group_messages_group_created', 'group_id', 'created_at'),
+    )
     id         = db.Column(db.Integer, primary_key=True)
     group_id   = db.Column(db.Integer, db.ForeignKey('groups.id'), nullable=False)
     user_id    = db.Column(db.Integer, db.ForeignKey('users.id'),  nullable=False)
@@ -342,6 +354,9 @@ class GroupMessage(db.Model):
 class LiveClassMessage(db.Model):
     """Chat messages specific to a live class session."""
     __tablename__ = 'live_class_messages'
+    __table_args__ = (
+        db.Index('ix_lc_messages_class_created', 'class_id', 'created_at'),
+    )
     id           = db.Column(db.Integer, primary_key=True)
     class_id     = db.Column(db.Integer, db.ForeignKey('live_classes.id'), nullable=False)
     user_id      = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)

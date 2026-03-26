@@ -5,6 +5,8 @@ from app import db
 from app.models import Group, GroupMessage, User
 from app.utils.response import ok, created, not_found, error, forbidden
 from app.utils.jwt_helper import admin_required, current_user_id
+from app.utils.cache_helper import cache_key_with_user
+from app import cache
 
 groups_bp = Blueprint('groups', __name__)
 
@@ -22,6 +24,7 @@ def _group_dict_with_count(group: Group) -> dict:
 
 @groups_bp.get('/mine')
 @jwt_required()
+@cache.cached(timeout=30, make_cache_key=cache_key_with_user)
 def my_group():
     """Returns the single group the student is assigned to by admin."""
     user = User.query.get(current_user_id())
@@ -44,6 +47,7 @@ def __check_group_access(gid: int) -> bool:
 
 @groups_bp.get('/<int:gid>')
 @jwt_required()
+@cache.cached(timeout=30, make_cache_key=cache_key_with_user)
 def get_group(gid: int):
     if not __check_group_access(gid):
         return forbidden()
@@ -55,6 +59,7 @@ def get_group(gid: int):
 
 @groups_bp.get('/<int:gid>/messages')
 @jwt_required()
+@cache.cached(timeout=30, make_cache_key=cache_key_with_user)
 def get_messages(gid: int):
     if not __check_group_access(gid):
         return forbidden()
@@ -106,6 +111,7 @@ def send_image(gid: int):
 
 @groups_bp.get('')
 @admin_required
+@cache.cached(timeout=300, make_cache_key=cache_key_with_user)
 def get_all_groups():
     groups = Group.query.order_by(Group.created_at.desc()).all()
     return ok({'items': [_group_dict_with_count(g) for g in groups]})

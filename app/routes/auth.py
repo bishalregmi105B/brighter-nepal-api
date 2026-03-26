@@ -8,11 +8,14 @@ from app.models import User
 from app.utils.response import ok, error, created
 from app.utils.jwt_helper import make_token, current_user_id, require_session
 from app.utils.student_id import generate_unique_student_id
+from app.utils.cache_helper import cache_key_with_user
+from app import cache, limiter
 
 auth_bp = Blueprint('auth', __name__)
 
 
 @auth_bp.post('/login')
+@limiter.limit('20 per minute')   # prevent brute-force: max 20 login attempts/min per IP
 def login():
     data       = request.get_json(silent=True) or {}
     # Accept either 'identifier' (new) or legacy 'email' key
@@ -48,6 +51,7 @@ def login():
 
 
 @auth_bp.post('/signup')
+@limiter.limit('10 per minute')   # prevent account-creation spam
 def signup():
     data  = request.get_json(silent=True) or {}
     name  = data.get('name', '').strip()
@@ -75,6 +79,7 @@ def signup():
 
 @auth_bp.get('/me')
 @require_session
+@cache.cached(timeout=60, make_cache_key=cache_key_with_user)
 def me():
     user = User.query.get(current_user_id())
     if not user:
@@ -84,6 +89,7 @@ def me():
 
 @auth_bp.post('/complete-onboarding')
 @require_session
+@limiter.limit('5 per minute')    # one-time action, strict limit
 def complete_onboarding():
     user = User.query.get(current_user_id())
     if not user:

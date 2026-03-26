@@ -7,11 +7,14 @@ from app import db
 from app.models import WeeklyTest, WeeklyTestQuestion, WeeklyTestAttempt, Question
 from app.utils.response import ok, created, not_found, paginate
 from app.utils.jwt_helper import admin_required, current_user_id
+from app.utils.cache_helper import cache_key_with_user
+from app import cache
 
 weekly_tests_bp = Blueprint('weekly_tests', __name__)
 
 @weekly_tests_bp.get('')
 @jwt_required()
+@cache.cached(timeout=300, query_string=True)
 def list_tests():
     subject = request.args.get('subject', '')
     page    = int(request.args.get('page', 1))
@@ -23,6 +26,7 @@ def list_tests():
 
 @weekly_tests_bp.get('/<int:tid>')
 @jwt_required()
+@cache.cached(timeout=300)
 def get_test(tid: int):
     test = WeeklyTest.query.get(tid)
     if not test:
@@ -113,6 +117,7 @@ def submit_attempt(tid: int):
 
 @weekly_tests_bp.get('/<int:tid>/attempts/me')
 @jwt_required()
+@cache.cached(timeout=300, make_cache_key=cache_key_with_user)
 def my_attempt(tid: int):
     attempt = WeeklyTestAttempt.query.filter_by(
         user_id=current_user_id(), test_id=tid

@@ -6,12 +6,15 @@ from app import db
 from app.models import ModelSet, ModelSetAttempt, ModelSetQuestion, Question
 from app.utils.response import ok, error, created, not_found, paginate
 from app.utils.jwt_helper import admin_required, current_user_id
+from app.utils.cache_helper import cache_key_with_user
+from app import cache
 
 model_sets_bp = Blueprint('model_sets', __name__)
 
 
 @model_sets_bp.get('/targets')
 @jwt_required()
+@cache.cached(timeout=300, query_string=True)
 def list_targets():
     """Return distinct target exam values across all model sets, plus defaults."""
     default_exams = ['St. Xavier\'s', 'SOS', 'KMC', 'CCRC', 'NIST']
@@ -29,6 +32,7 @@ def list_targets():
 
 @model_sets_bp.get('')
 @jwt_required()
+@cache.cached(timeout=300, query_string=True)
 def list_model_sets():
     tab    = request.args.get('tab', 'all')
     sort   = request.args.get('sort', 'newest')
@@ -58,6 +62,7 @@ def list_model_sets():
 
 @model_sets_bp.get('/<int:mid>')
 @jwt_required()
+@cache.cached(timeout=300)
 def get_model_set(mid: int):
     ms = ModelSet.query.get(mid)
     if not ms:
@@ -157,6 +162,7 @@ def submit_attempt(mid: int):
 
 @model_sets_bp.get('/<int:mid>/attempts/me')
 @jwt_required()
+@cache.cached(timeout=300, make_cache_key=cache_key_with_user)
 def my_attempts(mid: int):
     attempts = ModelSetAttempt.query.filter_by(
         user_id=current_user_id(), model_set_id=mid

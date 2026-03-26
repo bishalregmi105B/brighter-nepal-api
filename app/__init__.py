@@ -5,12 +5,23 @@ from flask import Flask
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from flask_jwt_extended import JWTManager
+from flask_caching import Cache
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from flask_compress import Compress
 from sqlalchemy import inspect, text, or_
 
 from app.config import Config
 
-db  = SQLAlchemy()
-jwt = JWTManager()
+db       = SQLAlchemy()
+jwt      = JWTManager()
+cache    = Cache()
+compress = Compress()
+limiter  = Limiter(
+    key_func=get_remote_address,
+    default_limits=[],           # no global limit — apply per-route only
+    storage_uri=None,            # set dynamically in create_app based on USE_REDIS_CACHE
+)
 
 def _ensure_legacy_columns(app: Flask) -> None:
     """
@@ -129,6 +140,13 @@ def create_app(config_class: type = Config) -> Flask:
     # Extensions
     db.init_app(app)
     jwt.init_app(app)
+    cache.init_app(app)
+    compress.init_app(app)
+    # Wire limiter with Redis backend when available for distributed rate limiting
+    use_redis = app.config.get('USE_REDIS_CACHE', False)
+    redis_url = app.config.get('CACHE_REDIS_URL', 'redis://localhost:6379/0')
+    limiter._storage_uri = f'{redis_url}' if use_redis else 'memory://'
+    limiter.init_app(app)
     CORS(app, origins=[app.config['FRONTEND_URL']], supports_credentials=True)
 
     # Blueprints

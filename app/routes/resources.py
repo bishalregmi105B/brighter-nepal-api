@@ -5,6 +5,7 @@ from app import db
 from app.models import Resource
 from app.utils.response import ok, created, not_found, paginate, error
 from app.utils.jwt_helper import admin_required
+from app import cache
 from werkzeug.utils import secure_filename
 from pathlib import Path
 from uuid import uuid4
@@ -37,6 +38,7 @@ def _generate_thumbnail(pdf_path: Path) -> str:
 
 @resources_bp.get('')
 @jwt_required()
+@cache.cached(timeout=300, query_string=True)
 def list_resources():
     subject      = request.args.get('subject', '')
     fmt          = request.args.get('format', '')
@@ -62,6 +64,7 @@ def list_resources():
 
 @resources_bp.get('/subjects')
 @jwt_required()
+@cache.cached(timeout=300)
 def list_subjects():
     """Return all distinct subjects that exist in the resources table."""
     rows = db.session.query(Resource.subject).distinct().order_by(Resource.subject).all()
@@ -72,6 +75,7 @@ def list_subjects():
 
 @resources_bp.get('/<int:rid>')
 @jwt_required()
+@cache.cached(timeout=300)
 def get_resource(rid: int):
     res = Resource.query.get(rid)
     if not res:

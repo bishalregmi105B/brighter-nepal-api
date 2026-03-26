@@ -5,12 +5,14 @@ from app import db
 from app.models import Notice
 from app.utils.response import ok, created, not_found
 from app.utils.jwt_helper import admin_required
+from app import cache
 
 notices_bp = Blueprint('notices', __name__)
 
 
 @notices_bp.get('')
 @jwt_required()
+@cache.cached(timeout=300, query_string=True)
 def list_notices():
     category = request.args.get('category', '')
     q = Notice.query
@@ -22,6 +24,7 @@ def list_notices():
 
 @notices_bp.get('/<int:nid>')
 @jwt_required()
+@cache.cached(timeout=300)
 def get_notice(nid: int):
     notice = Notice.query.get(nid)
     if not notice:
