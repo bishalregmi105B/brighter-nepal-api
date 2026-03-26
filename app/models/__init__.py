@@ -101,7 +101,8 @@ class ModelSet(db.Model):
     total_questions = db.Column(db.Integer, default=100)
     status      = db.Column(db.String(20), default='published') # published | draft
     targets     = db.Column(db.String(200), default='IOE')      # JSON list stored as string
-    forms_url   = db.Column(db.String(500), nullable=True, default=None)  # Optional Google Form link
+    forms_url   = db.Column(db.String(500), nullable=True, default=None)  # Google Form editor URL (legacy column name)
+    forms_view_url = db.Column(db.String(500), nullable=True, default=None)  # Google Form student responder URL
     google_match_mode = db.Column(db.String(40), default='email_then_student_id')
     google_student_id_question_id = db.Column(db.String(120), nullable=True, default=None)
     google_questions_last_imported_at = db.Column(db.DateTime, nullable=True)
@@ -111,12 +112,22 @@ class ModelSet(db.Model):
     questions   = db.relationship('ModelSetQuestion', backref='model_set', lazy=True, cascade='all, delete-orphan')
     attempts    = db.relationship('ModelSetAttempt', backref='model_set', lazy=True)
 
+    @property
+    def forms_edit_url(self) -> str | None:
+        return self.forms_url
+
+    @forms_edit_url.setter
+    def forms_edit_url(self, value: str | None) -> None:
+        self.forms_url = value
+
     def to_dict(self, include_questions=False, include_google=False):
         d = {
             'id': self.id, 'title': self.title, 'difficulty': self.difficulty,
             'duration_min': self.duration_min, 'total_questions': self.total_questions,
             'status': self.status, 'targets': json.loads(self.targets) if self.targets else [],
             'forms_url': self.forms_url or '',
+            'forms_edit_url': self.forms_url or '',
+            'forms_view_url': self.forms_view_url or '',
             'google_match_mode': self.google_match_mode or 'email_then_student_id',
             'google_student_id_question_id': self.google_student_id_question_id,
             'google_questions_last_imported_at': self.google_questions_last_imported_at.isoformat() if self.google_questions_last_imported_at else None,
@@ -209,7 +220,8 @@ class WeeklyTest(db.Model):
     duration_min = db.Column(db.Integer, default=60)
     scheduled_at = db.Column(db.DateTime, nullable=True)
     status       = db.Column(db.String(20), default='scheduled') # live | scheduled | completed
-    forms_url    = db.Column(db.String(500), nullable=True, default=None)  # Google Forms link
+    forms_url    = db.Column(db.String(500), nullable=True, default=None)  # Google Form editor URL (legacy column name)
+    forms_view_url = db.Column(db.String(500), nullable=True, default=None)  # Google Form student responder URL
     google_match_mode = db.Column(db.String(40), default='email_then_student_id')
     google_student_id_question_id = db.Column(db.String(120), nullable=True, default=None)
     google_questions_last_imported_at = db.Column(db.DateTime, nullable=True)
@@ -219,6 +231,14 @@ class WeeklyTest(db.Model):
     questions    = db.relationship('WeeklyTestQuestion', backref='test', lazy=True, cascade='all, delete-orphan')
     attempts     = db.relationship('WeeklyTestAttempt',  backref='test', lazy=True)
 
+    @property
+    def forms_edit_url(self) -> str | None:
+        return self.forms_url
+
+    @forms_edit_url.setter
+    def forms_edit_url(self, value: str | None) -> None:
+        self.forms_url = value
+
     def to_dict(self, include_questions=False, include_google=False):
         d = {
             'id': self.id, 'title': self.title, 'subject': self.subject,
@@ -227,6 +247,8 @@ class WeeklyTest(db.Model):
             'question_count': len(self.questions),
             'total_questions': len(self.questions),
             'forms_url': self.forms_url or '',
+            'forms_edit_url': self.forms_url or '',
+            'forms_view_url': self.forms_view_url or '',
             'google_match_mode': self.google_match_mode or 'email_then_student_id',
             'google_student_id_question_id': self.google_student_id_question_id,
             'google_questions_last_imported_at': self.google_questions_last_imported_at.isoformat() if self.google_questions_last_imported_at else None,

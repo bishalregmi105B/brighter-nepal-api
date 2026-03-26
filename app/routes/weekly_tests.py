@@ -46,12 +46,15 @@ def get_test(tid: int):
 @admin_required
 def create_test():
     data = request.get_json(silent=True) or {}
+    forms_edit_url = data.get('forms_edit_url') if 'forms_edit_url' in data else data.get('forms_url')
+    forms_view_url = data.get('forms_view_url')
     test = WeeklyTest(
         title=data.get('title', 'Untitled'),
         subject=data.get('subject', 'General'),
         duration_min=data.get('duration_min', 60),
         status=data.get('status', 'scheduled'),
-        forms_url=data.get('forms_url', None),
+        forms_url=(forms_edit_url or None),
+        forms_view_url=(forms_view_url or None),
         google_match_mode=data.get('google_match_mode') or 'email_then_student_id',
         google_student_id_question_id=data.get('google_student_id_question_id') or None,
         scheduled_at=datetime.fromisoformat(data['scheduled_at']) if data.get('scheduled_at') else None,
@@ -92,12 +95,14 @@ def update_test(tid: int):
         return not_found('Weekly Test')
     data = request.get_json(silent=True) or {}
     previous_forms_url = test.forms_url or ''
-    for f in ('title', 'subject', 'duration_min', 'status', 'forms_url', 'google_match_mode', 'google_student_id_question_id'):
+    for f in ('title', 'subject', 'duration_min', 'status', 'forms_url', 'forms_view_url', 'google_match_mode', 'google_student_id_question_id'):
         if f in data:
-            if f == 'forms_url':
+            if f in ('forms_url', 'forms_view_url'):
                 setattr(test, f, data[f] or None)
             else:
                 setattr(test, f, data[f])
+    if 'forms_edit_url' in data:
+        test.forms_url = data.get('forms_edit_url') or None
     if 'scheduled_at' in data:
         test.scheduled_at = datetime.fromisoformat(data['scheduled_at']) if data['scheduled_at'] else None
     try:

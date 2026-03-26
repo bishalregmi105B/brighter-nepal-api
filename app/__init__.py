@@ -36,6 +36,7 @@ def _ensure_legacy_columns(app: Flask) -> None:
         },
         'model_sets': {
             'forms_url': 'TEXT',
+            'forms_view_url': 'TEXT',
             "google_match_mode": "TEXT DEFAULT 'email_then_student_id'",
             'google_student_id_question_id': 'TEXT',
             'google_questions_last_imported_at': 'DATETIME',
@@ -44,6 +45,7 @@ def _ensure_legacy_columns(app: Flask) -> None:
         },
         'weekly_tests': {
             'forms_url': 'TEXT',
+            'forms_view_url': 'TEXT',
             "google_match_mode": "TEXT DEFAULT 'email_then_student_id'",
             'google_student_id_question_id': 'TEXT',
             'google_questions_last_imported_at': 'DATETIME',

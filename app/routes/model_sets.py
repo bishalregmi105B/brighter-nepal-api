@@ -82,6 +82,8 @@ def get_model_set(mid: int):
 @admin_required
 def create_model_set():
     data = request.get_json(silent=True) or {}
+    forms_edit_url = data.get('forms_edit_url') if 'forms_edit_url' in data else data.get('forms_url')
+    forms_view_url = data.get('forms_view_url')
     ms = ModelSet(
         title=data.get('title', 'Untitled'),
         difficulty=data.get('difficulty', 'Medium'),
@@ -89,7 +91,8 @@ def create_model_set():
         total_questions=data.get('total_questions', 100),
         status=data.get('status', 'draft'),
         targets=json.dumps(data.get('targets', ['IOE'])),
-        forms_url=data.get('forms_url') or None,
+        forms_url=forms_edit_url or None,
+        forms_view_url=forms_view_url or None,
         google_match_mode=data.get('google_match_mode') or 'email_then_student_id',
         google_student_id_question_id=data.get('google_student_id_question_id') or None,
     )
@@ -130,12 +133,14 @@ def update_model_set(mid: int):
         return not_found('Model Set')
     data = request.get_json(silent=True) or {}
     previous_forms_url = ms.forms_url or ''
-    for field in ('title', 'difficulty', 'duration_min', 'total_questions', 'status', 'forms_url', 'google_match_mode', 'google_student_id_question_id'):
+    for field in ('title', 'difficulty', 'duration_min', 'total_questions', 'status', 'forms_url', 'forms_view_url', 'google_match_mode', 'google_student_id_question_id'):
         if field in data:
-            if field == 'forms_url':
+            if field in ('forms_url', 'forms_view_url'):
                 setattr(ms, field, data[field] or None)
             else:
                 setattr(ms, field, data[field])
+    if 'forms_edit_url' in data:
+        ms.forms_url = data.get('forms_edit_url') or None
     if 'targets' in data:
         ms.targets = json.dumps(data['targets'])
     try:

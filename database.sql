@@ -49,7 +49,8 @@ CREATE TABLE IF NOT EXISTS model_sets (
     total_questions INTEGER DEFAULT 100,
     status          TEXT DEFAULT 'published',  -- published | draft
     targets         TEXT DEFAULT '["IOE"]',    -- JSON list
-    forms_url       TEXT DEFAULT '',
+    forms_url       TEXT DEFAULT '',            -- Google Form edit URL
+    forms_view_url  TEXT DEFAULT '',            -- Google Form student responder URL
     created_at      TEXT DEFAULT (datetime('now'))
 );
 
@@ -72,7 +73,8 @@ CREATE TABLE IF NOT EXISTS weekly_tests (
     duration_min INTEGER DEFAULT 60,
     scheduled_at TEXT,
     status       TEXT DEFAULT 'scheduled',     -- live | scheduled | completed
-    forms_url    TEXT DEFAULT '',
+    forms_url    TEXT DEFAULT '',              -- Google Form edit URL
+    forms_view_url TEXT DEFAULT '',            -- Google Form student responder URL
     created_at   TEXT DEFAULT (datetime('now'))
 );
 

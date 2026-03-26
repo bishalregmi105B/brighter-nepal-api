@@ -232,7 +232,7 @@ def _compose_question_text(title: str, description: str) -> str:
 def import_google_form_questions(entity_type: str, entity: ModelSet | WeeklyTest) -> dict[str, Any]:
     forms_url = (entity.forms_url or '').strip()
     if not forms_url:
-        raise GoogleFormsError('Set a Google Forms URL before importing questions.')
+        raise GoogleFormsError('Set a Google Form Edit URL before importing questions.')
 
     form_id = parse_google_form_id(forms_url)
     form = fetch_form(form_id)
@@ -365,7 +365,7 @@ def _score_from_google_inventory(entity_type: str, entity_id: int, answers: dict
 
 def sync_google_form_results(entity_type: str, entity: ModelSet | WeeklyTest) -> dict[str, Any]:
     if not (entity.google_questions_last_imported_at and (entity.forms_url or '').strip()):
-        raise GoogleFormsError('Import Google questions first before syncing results.')
+        raise GoogleFormsError('Import Google questions first (from Edit URL) before syncing results.')
 
     form_id = parse_google_form_id(entity.forms_url)
     responses = list_form_responses(form_id, submitted_after=entity.google_results_last_synced_at)
