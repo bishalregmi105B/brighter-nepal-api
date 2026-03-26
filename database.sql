@@ -5,6 +5,7 @@
 -- Users
 CREATE TABLE IF NOT EXISTS users (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    student_id    TEXT UNIQUE,                 -- random 6-digit ID used for BC login
     name          TEXT NOT NULL,
     email         TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
@@ -13,8 +14,12 @@ CREATE TABLE IF NOT EXISTS users (
     role          TEXT DEFAULT 'student',    -- student | admin
     admin_note    TEXT DEFAULT '',
     group_id      INTEGER REFERENCES groups(id),
+    onboarding_completed INTEGER DEFAULT 1,  -- 1 = done, 0 = needs onboarding
+    onboarding_data TEXT DEFAULT '{}',       -- saved one-time onboarding form payload (JSON string)
     created_at    TEXT DEFAULT (datetime('now'))
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS ix_users_student_id ON users(student_id);
 
 -- Groups
 CREATE TABLE IF NOT EXISTS groups (
@@ -44,6 +49,7 @@ CREATE TABLE IF NOT EXISTS model_sets (
     total_questions INTEGER DEFAULT 100,
     status          TEXT DEFAULT 'published',  -- published | draft
     targets         TEXT DEFAULT '["IOE"]',    -- JSON list
+    forms_url       TEXT DEFAULT '',
     created_at      TEXT DEFAULT (datetime('now'))
 );
 
@@ -66,6 +72,7 @@ CREATE TABLE IF NOT EXISTS weekly_tests (
     duration_min INTEGER DEFAULT 60,
     scheduled_at TEXT,
     status       TEXT DEFAULT 'scheduled',     -- live | scheduled | completed
+    forms_url    TEXT DEFAULT '',
     created_at   TEXT DEFAULT (datetime('now'))
 );
 
@@ -98,6 +105,8 @@ CREATE TABLE IF NOT EXISTS live_classes (
     scheduled_at TEXT,
     duration_min INTEGER DEFAULT 60,
     status       TEXT DEFAULT 'scheduled',     -- live | scheduled | completed | locked
+    stream_url   TEXT DEFAULT '',
+    group_id     INTEGER,
     watchers     INTEGER DEFAULT 0,
     created_at   TEXT DEFAULT (datetime('now'))
 );

@@ -1,13 +1,18 @@
 """Resources (Study Materials) Blueprint."""
-from flask import Blueprint, request
+from flask import Blueprint, request, send_from_directory
 from flask_jwt_extended import jwt_required
 from app import db
 from app.models import Resource
-from app.utils.response import ok, created, not_found, paginate
+from app.utils.response import ok, created, not_found, paginate, error
 from app.utils.jwt_helper import admin_required
+from werkzeug.utils import secure_filename
+from pathlib import Path
+from uuid import uuid4
 import json
 
 resources_bp = Blueprint('resources', __name__)
+UPLOAD_DIR = Path(__file__).resolve().parents[2] / 'uploads' / 'resources'
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 
 @resources_bp.get('')
@@ -71,6 +76,45 @@ def create_resource():
     db.session.add(res)
     db.session.commit()
     return created(res.to_dict())
+
+
+@resources_bp.post('/upload-pdf')
+@admin_required
+def upload_pdf():
+    """Upload a PDF file to local server storage and return hosted URL."""
+    file = request.files.get('file')
+    if not file or not file.filename:
+        return error('PDF file is required')
+
+    original_name = secure_filename(file.filename)
+    ext = Path(original_name).suffix.lower()
+    if ext != '.pdf':
+        return error('Only PDF files are allowed')
+
+    filename = f'{uuid4().hex}.pdf'
+    target = UPLOAD_DIR / filename
+    file.save(target)
+    size_bytes = target.stat().st_size if target.exists() else 0
+
+    file_url = f"{request.host_url.rstrip('/')}/api/resources/files/{filename}"
+    return created({
+        'file_url': file_url,
+        'filename': filename,
+        'original_name': original_name,
+        'size_bytes': size_bytes,
+    }, 'PDF uploaded')
+
+
+@resources_bp.get('/files/<path:filename>')
+def serve_uploaded_file(filename: str):
+    """Serve uploaded resource files (PDF) from local storage."""
+    safe_name = secure_filename(filename)
+    if not safe_name or safe_name != filename:
+        return not_found('File')
+    path = UPLOAD_DIR / safe_name
+    if not path.exists() or not path.is_file():
+        return not_found('File')
+    return send_from_directory(str(UPLOAD_DIR), safe_name, mimetype='application/pdf', as_attachment=False, conditional=True)
 
 
 @resources_bp.patch('/<int:rid>')

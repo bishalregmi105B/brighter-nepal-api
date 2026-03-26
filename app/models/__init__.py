@@ -9,6 +9,7 @@ import json, uuid
 class User(db.Model):
     __tablename__ = 'users'
     id             = db.Column(db.Integer, primary_key=True)
+    student_id     = db.Column(db.String(6), unique=True, nullable=True, default=None)  # 6-digit login ID
     name           = db.Column(db.String(120), nullable=False)
     email          = db.Column(db.String(120), unique=True, nullable=False)
     password_hash  = db.Column(db.String(256), nullable=False)
@@ -21,6 +22,8 @@ class User(db.Model):
     role           = db.Column(db.String(20), default='student')  # student | admin
     admin_note     = db.Column(db.Text, default='')
     group_id       = db.Column(db.Integer, db.ForeignKey('groups.id'), nullable=True)
+    onboarding_completed = db.Column(db.Boolean, default=True)
+    onboarding_data = db.Column(db.Text, default='{}')
     created_at     = db.Column(db.DateTime, default=datetime.utcnow)
     # Single-device login enforcement
     session_token  = db.Column(db.String(64), nullable=True, default=None)
@@ -38,22 +41,41 @@ class User(db.Model):
         return self.session_token
 
     def to_dict(self, include_email=False, admin=False):
+        onboarding_data = {}
+        if self.onboarding_data:
+            try:
+                parsed = json.loads(self.onboarding_data)
+                onboarding_data = parsed if isinstance(parsed, dict) else {}
+            except Exception:
+                onboarding_data = {}
         d = {
             'id':           self.id,
+            'student_id':   self.student_id or str(self.id).zfill(6),
             'name':         self.name,
             'plan':         self.plan,
             'status':       self.status,
             'role':         self.role,
             'group_id':     self.group_id,
+            'onboarding_completed': bool(self.onboarding_completed) if self.onboarding_completed is not None else True,
+            'onboarding_data': onboarding_data,
             'device_count': self.device_count or 0,
             'created_at':   self.created_at.isoformat(),
             'email':        self.email,
         }
         if admin:
+            joined_method = (self.joined_method or '').strip()
+            if not joined_method:
+                email = (self.email or '').lower()
+                if self.role == 'admin':
+                    joined_method = 'Admin Account'
+                elif email.endswith('@brighternepal.local') or email.endswith('@placeholder.local'):
+                    joined_method = 'Admin Enrollment'
+                else:
+                    joined_method = 'Legacy Account'
             d['whatsapp']       = self.whatsapp
             d['paid_amount']    = self.paid_amount
             d['plain_password'] = self.plain_password
-            d['joined_method']  = self.joined_method
+            d['joined_method']  = joined_method
         elif include_email:
             d['email'] = self.email
         return d
@@ -69,6 +91,7 @@ class ModelSet(db.Model):
     total_questions = db.Column(db.Integer, default=100)
     status      = db.Column(db.String(20), default='published') # published | draft
     targets     = db.Column(db.String(200), default='IOE')      # JSON list stored as string
+    forms_url   = db.Column(db.String(500), nullable=True, default=None)  # Optional Google Form link
     created_at  = db.Column(db.DateTime, default=datetime.utcnow)
     questions   = db.relationship('ModelSetQuestion', backref='model_set', lazy=True, cascade='all, delete-orphan')
     attempts    = db.relationship('ModelSetAttempt', backref='model_set', lazy=True)
@@ -78,6 +101,7 @@ class ModelSet(db.Model):
             'id': self.id, 'title': self.title, 'difficulty': self.difficulty,
             'duration_min': self.duration_min, 'total_questions': self.total_questions,
             'status': self.status, 'targets': json.loads(self.targets) if self.targets else [],
+            'forms_url': self.forms_url or '',
             'question_count': len(self.questions),
             'created_at': self.created_at.isoformat(),
         }

@@ -5,11 +5,121 @@ from flask import Flask
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from flask_jwt_extended import JWTManager
+from sqlalchemy import inspect, text, or_
 
 from app.config import Config
 
 db  = SQLAlchemy()
 jwt = JWTManager()
+
+def _ensure_legacy_columns(app: Flask) -> None:
+    """
+    Add newly introduced nullable columns for older SQLite DBs that were
+    created before these fields existed.
+    """
+    required_columns: dict[str, dict[str, str]] = {
+        'users': {
+            'student_id': 'TEXT',
+            'onboarding_completed': 'INTEGER DEFAULT 1',
+            'onboarding_data': "TEXT DEFAULT '{}'",
+        },
+        'model_sets': {
+            'forms_url': 'TEXT',
+        },
+        'weekly_tests': {
+            'forms_url': 'TEXT',
+        },
+        'live_classes': {
+            'stream_url': 'TEXT',
+            'group_id': 'INTEGER',
+        },
+    }
+
+    inspector = inspect(db.engine)
+    table_names = set(inspector.get_table_names())
+
+    with db.engine.begin() as conn:
+        for table_name, cols in required_columns.items():
+            if table_name not in table_names:
+                continue
+            existing = {c['name'] for c in inspector.get_columns(table_name)}
+            for col_name, col_type in cols.items():
+                if col_name in existing:
+                    continue
+                try:
+                    conn.execute(text(f'ALTER TABLE {table_name} ADD COLUMN {col_name} {col_type}'))
+                    app.logger.info('Added missing column %s.%s', table_name, col_name)
+                except Exception as err:
+                    app.logger.warning('Could not add missing column %s.%s (%s)', table_name, col_name, err)
+        try:
+            conn.execute(text('CREATE UNIQUE INDEX IF NOT EXISTS ix_users_student_id ON users(student_id)'))
+        except Exception as err:
+            app.logger.warning('Could not ensure index ix_users_student_id (%s)', err)
+
+def _ensure_user_defaults(app: Flask) -> None:
+    """
+    Backfill user metadata for older DB rows so admin UI fields are never blank:
+    - ensure student_id exists for every user
+    - ensure joined_method is populated
+    - ensure onboarding_completed is non-null
+    - seed default contact methods when table is empty/new
+    """
+    from app.models import User, ContactMethod
+    from app.utils.student_id import generate_unique_student_id
+
+    changed = False
+
+    users_missing_sid = User.query.filter(
+        or_(User.student_id.is_(None), db.func.trim(User.student_id) == '')
+    ).all()
+    for user in users_missing_sid:
+        user.student_id = generate_unique_student_id()
+        changed = True
+
+    users_missing_joined = User.query.filter(
+        or_(User.joined_method.is_(None), db.func.trim(User.joined_method) == '')
+    ).all()
+    for user in users_missing_joined:
+        email = (user.email or '').lower()
+        if user.role == 'admin':
+            user.joined_method = 'Admin Account'
+        elif email.endswith('@brighternepal.local') or email.endswith('@placeholder.local'):
+            user.joined_method = 'Admin Enrollment'
+        else:
+            user.joined_method = 'Legacy Account'
+        changed = True
+
+    users_missing_onboarding = User.query.filter(User.onboarding_completed.is_(None)).all()
+    for user in users_missing_onboarding:
+        user.onboarding_completed = True
+        changed = True
+    users_missing_onboarding_data = User.query.filter(
+        or_(User.onboarding_data.is_(None), db.func.trim(User.onboarding_data) == '')
+    ).all()
+    for user in users_missing_onboarding_data:
+        user.onboarding_data = '{}'
+        changed = True
+
+    default_methods = [
+        ('Admin Enrollment', 'other'),
+        ('Self Signup', 'other'),
+        ('Legacy Account', 'other'),
+        ('WhatsApp', 'whatsapp'),
+        ('Messenger', 'messenger'),
+        ('Facebook', 'facebook'),
+        ('Search Engine', 'other'),
+        ('Friend / Recommendation', 'other'),
+    ]
+    existing = {(m.name or '').strip().lower() for m in ContactMethod.query.all()}
+    for name, channel in default_methods:
+        if name.lower() in existing:
+            continue
+        db.session.add(ContactMethod(name=name, channel=channel, is_active=True))
+        changed = True
+
+    if changed:
+        db.session.commit()
+        app.logger.info('Backfilled user/contact defaults for legacy rows')
 
 
 def create_app(config_class: type = Config) -> Flask:
@@ -52,5 +162,11 @@ def create_app(config_class: type = Config) -> Flask:
     # Create tables on first run
     with app.app_context():
         db.create_all()
+        _ensure_legacy_columns(app)
+        try:
+            _ensure_user_defaults(app)
+        except Exception as err:
+            db.session.rollback()
+            app.logger.warning('Could not backfill user defaults (%s)', err)
 
     return app

@@ -8,6 +8,17 @@ from app.utils.jwt_helper import admin_required, current_user_id
 
 groups_bp = Blueprint('groups', __name__)
 
+def _member_count_for_group(gid: int) -> int:
+    """Current non-admin members assigned to this chat group."""
+    return User.query.filter(User.group_id == gid, User.role != 'admin').count()
+
+def _group_dict_with_count(group: Group) -> dict:
+    d = group.to_dict()
+    current = _member_count_for_group(group.id)
+    d['member_count'] = current
+    d['current_member_count'] = current
+    return d
+
 
 @groups_bp.get('/mine')
 @jwt_required()
@@ -19,7 +30,7 @@ def my_group():
     group = Group.query.get(user.group_id)
     if not group:
         return not_found('Group')
-    return ok(group.to_dict())
+    return ok(_group_dict_with_count(group))
 
 
 def __check_group_access(gid: int) -> bool:
@@ -39,7 +50,7 @@ def get_group(gid: int):
     group = Group.query.get(gid)
     if not group:
         return not_found('Group')
-    return ok(group.to_dict())
+    return ok(_group_dict_with_count(group))
 
 
 @groups_bp.get('/<int:gid>/messages')
@@ -97,7 +108,7 @@ def send_image(gid: int):
 @admin_required
 def get_all_groups():
     groups = Group.query.order_by(Group.created_at.desc()).all()
-    return ok({'items': [g.to_dict() for g in groups]})
+    return ok({'items': [_group_dict_with_count(g) for g in groups]})
 
 
 # Admin: assign a group to a student
@@ -112,4 +123,4 @@ def create_group():
     )
     db.session.add(group)
     db.session.commit()
-    return created(group.to_dict())
+    return created(_group_dict_with_count(group))

@@ -76,6 +76,7 @@ def create_model_set():
         total_questions=data.get('total_questions', 100),
         status=data.get('status', 'draft'),
         targets=json.dumps(data.get('targets', ['IOE'])),
+        forms_url=data.get('forms_url') or None,
     )
     db.session.add(ms)
     db.session.flush()
@@ -112,9 +113,12 @@ def update_model_set(mid: int):
     if not ms:
         return not_found('Model Set')
     data = request.get_json(silent=True) or {}
-    for field in ('title', 'difficulty', 'duration_min', 'total_questions', 'status'):
+    for field in ('title', 'difficulty', 'duration_min', 'total_questions', 'status', 'forms_url'):
         if field in data:
-            setattr(ms, field, data[field])
+            if field == 'forms_url':
+                setattr(ms, field, data[field] or None)
+            else:
+                setattr(ms, field, data[field])
     if 'targets' in data:
         ms.targets = json.dumps(data['targets'])
     db.session.commit()

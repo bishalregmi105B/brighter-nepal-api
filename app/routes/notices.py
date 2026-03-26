@@ -16,7 +16,7 @@ def list_notices():
     q = Notice.query
     if category:
         q = q.filter_by(category=category)
-    notices = q.order_by(Notice.is_pinned.desc(), Notice.created_at.desc()).all()
+    notices = q.order_by(Notice.created_at.desc(), Notice.id.desc()).all()
     return ok([n.to_dict() for n in notices])
 
 

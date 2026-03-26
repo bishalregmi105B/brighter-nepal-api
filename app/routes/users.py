@@ -2,9 +2,10 @@
 from flask import Blueprint, request
 from flask_jwt_extended import jwt_required
 from app import db
-from app.models import User, Payment, ContactMethod
+from app.models import User, Payment, ContactMethod, Group
 from app.utils.response import ok, error, not_found, paginate
 from app.utils.jwt_helper import admin_required
+from app.utils.student_id import generate_unique_student_id
 from datetime import datetime, date
 
 users_bp = Blueprint('users', __name__)
@@ -18,7 +19,7 @@ def list_users():
     page   = int(request.args.get('page', 1))
     limit  = int(request.args.get('limit', 20))
 
-    q = User.query
+    q = User.query.filter(User.role != 'admin')
     if tab in ('paid', 'trial'):
         q = q.filter_by(plan=tab)
     if search:
@@ -77,13 +78,37 @@ def update_user(uid: int):
     if not user:
         return not_found('User')
     data = request.get_json(silent=True) or {}
-    for field in ('plan', 'status', 'admin_note', 'group_id', 'whatsapp', 'joined_method'):
+    previous_group_id = user.group_id
+    for field in ('plan', 'status', 'admin_note', 'whatsapp'):
         if field in data:
             setattr(user, field, data[field])
+    if 'group_id' in data:
+        raw_group_id = data.get('group_id')
+        if raw_group_id in (None, '', 0, '0'):
+            user.group_id = None
+        else:
+            try:
+                gid = int(raw_group_id)
+            except (TypeError, ValueError):
+                return error('group_id must be a number or null')
+            if not Group.query.get(gid):
+                return error('Selected group not found', 404)
+            user.group_id = gid
+    if 'joined_method' in data:
+        joined_method = (data.get('joined_method') or '').strip()
+        user.joined_method = joined_method or None
     if 'paid_amount' in data and data['paid_amount'] is not None:
         user.paid_amount = int(data['paid_amount'])
     if 'password' in data and data['password']:
         user.set_password(data['password'])
+    if previous_group_id != user.group_id:
+        for gid in {previous_group_id, user.group_id}:
+            if not gid:
+                continue
+            group = Group.query.get(gid)
+            if not group:
+                continue
+            group.member_count = User.query.filter(User.group_id == gid, User.role != 'admin').count()
     db.session.commit()
     return ok(user.to_dict(admin=True), 'User updated')
 
@@ -128,7 +153,10 @@ def update_contact_method(mid: int):
         return not_found('ContactMethod')
     data = request.get_json(silent=True) or {}
     if 'name' in data:
-        m.name = data['name'].strip()
+        name = (data.get('name') or '').strip()
+        if not name:
+            return error('name is required')
+        m.name = name
     if 'channel' in data:
         m.channel = data['channel']
     db.session.commit()
@@ -225,13 +253,22 @@ def bulk_create():
         name = (u.get('name') or '').strip()
         if not name:
             continue
+        student_id = generate_unique_student_id()
+        bc_id      = f'BC{student_id}'
+        pw         = f'BC{student_id}'  # password = ID without hyphen
         raw_email = (u.get('email') or '').strip().lower()
-        pw        = u.get('password') or 'Brighter@123'
+        joined_via = (u.get('joined_method') or '').strip() or 'Admin Enrollment'
         # Skip if email given and already taken
         if raw_email and User.query.filter_by(email=raw_email).first():
             continue
-        placeholder = f'pending_{id(u)}@placeholder.local'
-        user = User(name=name, email=raw_email or placeholder)
+        placeholder = f'pending_{student_id}@placeholder.local'
+        user = User(
+            name=name,
+            email=raw_email or placeholder,
+            student_id=student_id,
+            joined_method=joined_via,
+            onboarding_completed=False,
+        )
         user.set_password(pw)
         user.plan     = u.get('plan', 'trial')
         user.whatsapp = u.get('whatsapp')
@@ -239,11 +276,11 @@ def bulk_create():
         db.session.flush()   # get user.id
         # Replace placeholder email with BC-based one if no real email given
         if not raw_email:
-            user.email = f'bc{str(user.id).zfill(4)}@brighternepal.local'
+            user.email = f'bc{student_id}@brighternepal.local'
         db.session.flush()
         created.append({
             'id':       user.id,
-            'bc_id':    f'BC-{str(user.id).zfill(4)}',
+            'bc_id':    bc_id,
             'name':     user.name,
             'email':    user.email,
             'password': pw,
