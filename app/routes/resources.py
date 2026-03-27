@@ -1,10 +1,9 @@
 """Resources (Study Materials) Blueprint."""
 from flask import Blueprint, request, send_from_directory
-from flask_jwt_extended import jwt_required
 from app import db
 from app.models import Resource, LiveClass
 from app.utils.response import ok, created, not_found, paginate, error
-from app.utils.jwt_helper import admin_required
+from app.utils.jwt_helper import admin_required, require_session
 from app.utils.url_cipher import encrypt_url
 from app import cache
 from werkzeug.utils import secure_filename
@@ -50,7 +49,7 @@ def _generate_thumbnail(pdf_path: Path) -> str:
 
 
 @resources_bp.get('')
-@jwt_required()
+@require_session
 @cache.cached(timeout=300, query_string=True)
 def list_resources():
     subject      = request.args.get('subject', '')
@@ -76,7 +75,7 @@ def list_resources():
 
 
 @resources_bp.get('/subjects')
-@jwt_required()
+@require_session
 @cache.cached(timeout=300)
 def list_subjects():
     """Return all distinct subjects that exist in the resources table."""
@@ -87,7 +86,7 @@ def list_subjects():
 
 
 @resources_bp.get('/<int:rid>')
-@jwt_required()
+@require_session
 @cache.cached(timeout=300)
 def get_resource(rid: int):
     res = Resource.query.get(rid)
@@ -223,7 +222,7 @@ def delete_resource(rid: int):
 
 
 @resources_bp.post('/<int:rid>/download')
-@jwt_required()
+@require_session
 def log_download(rid: int):
     res = Resource.query.get(rid)
     if not res:

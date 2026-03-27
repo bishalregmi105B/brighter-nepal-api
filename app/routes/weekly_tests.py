@@ -2,11 +2,10 @@
 import json
 from datetime import datetime
 from flask import Blueprint, request
-from flask_jwt_extended import jwt_required
 from app import db
 from app.models import WeeklyTest, WeeklyTestQuestion, WeeklyTestAttempt, Question
 from app.utils.response import ok, created, not_found, paginate, error
-from app.utils.jwt_helper import admin_required, current_user_id, current_user_role
+from app.utils.jwt_helper import admin_required, current_user_id, current_user_role, require_session
 from app.utils.cache_helper import cache_key_with_user
 from app.utils.google_forms import GoogleFormsError, parse_google_form_id
 from app.utils.google_forms_sync import (
@@ -21,7 +20,7 @@ from app import cache
 weekly_tests_bp = Blueprint('weekly_tests', __name__)
 
 @weekly_tests_bp.get('')
-@jwt_required()
+@require_session
 @cache.cached(timeout=300, query_string=True)
 def list_tests():
     subject = request.args.get('subject', '')
@@ -33,7 +32,7 @@ def list_tests():
 
 
 @weekly_tests_bp.get('/<int:tid>')
-@jwt_required()
+@require_session
 @cache.cached(timeout=300, make_cache_key=cache_key_with_user)
 def get_test(tid: int):
     test = WeeklyTest.query.get(tid)
@@ -144,7 +143,7 @@ def get_participants(tid: int):
 
 
 @weekly_tests_bp.post('/<int:tid>/attempts')
-@jwt_required()
+@require_session
 def submit_attempt(tid: int):
     test = WeeklyTest.query.get(tid)
     if not test:
@@ -166,7 +165,7 @@ def submit_attempt(tid: int):
 
 
 @weekly_tests_bp.get('/<int:tid>/attempts/me')
-@jwt_required()
+@require_session
 @cache.cached(timeout=300, make_cache_key=cache_key_with_user)
 def my_attempt(tid: int):
     attempt = WeeklyTestAttempt.query.filter_by(
@@ -214,7 +213,7 @@ def sync_google_results(tid: int):
 
 
 @weekly_tests_bp.get('/<int:tid>/results/me')
-@jwt_required()
+@require_session
 def my_result(tid: int):
     test = WeeklyTest.query.get(tid)
     if not test:

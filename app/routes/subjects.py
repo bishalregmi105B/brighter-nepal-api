@@ -1,9 +1,9 @@
 """Subjects Blueprint — shared subject metadata across the platform."""
 from flask import Blueprint
-from flask_jwt_extended import jwt_required
 
 from app import cache, db
 from app.models import LiveClass, Question, Resource, WeeklyTest
+from app.utils.jwt_helper import require_session
 from app.utils.response import ok
 
 subjects_bp = Blueprint('subjects', __name__)
@@ -22,7 +22,7 @@ def _normalize_subjects(values):
 
 
 @subjects_bp.get('')
-@jwt_required()
+@require_session
 @cache.cached(timeout=300)
 def list_subjects():
     rows = []

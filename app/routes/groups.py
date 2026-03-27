@@ -1,10 +1,9 @@
 """Groups Blueprint."""
 from flask import Blueprint, request
-from flask_jwt_extended import jwt_required
 from app import db
 from app.models import Group, GroupMessage, User
 from app.utils.response import ok, created, not_found, error, forbidden
-from app.utils.jwt_helper import admin_required, current_user_id
+from app.utils.jwt_helper import admin_required, current_user_id, require_session
 from app.utils.cache_helper import cache_key_with_user
 from app import cache
 
@@ -23,7 +22,7 @@ def _group_dict_with_count(group: Group) -> dict:
 
 
 @groups_bp.get('/mine')
-@jwt_required()
+@require_session
 @cache.cached(timeout=30, make_cache_key=cache_key_with_user)
 def my_group():
     """Returns the single group the student is assigned to by admin."""
@@ -46,7 +45,7 @@ def __check_group_access(gid: int) -> bool:
 
 
 @groups_bp.get('/<int:gid>')
-@jwt_required()
+@require_session
 @cache.cached(timeout=30, make_cache_key=cache_key_with_user)
 def get_group(gid: int):
     if not __check_group_access(gid):
@@ -58,7 +57,7 @@ def get_group(gid: int):
 
 
 @groups_bp.get('/<int:gid>/messages')
-@jwt_required()
+@require_session
 @cache.cached(timeout=30, make_cache_key=cache_key_with_user)
 def get_messages(gid: int):
     if not __check_group_access(gid):
@@ -73,7 +72,7 @@ def get_messages(gid: int):
 
 
 @groups_bp.post('/<int:gid>/messages')
-@jwt_required()
+@require_session
 def send_message(gid: int):
     if not __check_group_access(gid):
         return forbidden()
@@ -91,7 +90,7 @@ def send_message(gid: int):
 
 
 @groups_bp.post('/<int:gid>/messages/image')
-@jwt_required()
+@require_session
 def send_image(gid: int):
     """Stores an image URL (client uploads to cloud, sends URL here)."""
     if not __check_group_access(gid):

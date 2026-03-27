@@ -1,11 +1,10 @@
 """Model Sets Blueprint."""
 import json
 from flask import Blueprint, request
-from flask_jwt_extended import jwt_required
 from app import db
 from app.models import ModelSet, ModelSetAttempt, ModelSetQuestion, Question
 from app.utils.response import ok, error, created, not_found, paginate
-from app.utils.jwt_helper import admin_required, current_user_id, current_user_role
+from app.utils.jwt_helper import admin_required, current_user_id, current_user_role, require_session
 from app.utils.cache_helper import cache_key_with_user
 from app.utils.google_forms import GoogleFormsError, parse_google_form_id
 from app.utils.google_forms_sync import (
@@ -21,7 +20,7 @@ model_sets_bp = Blueprint('model_sets', __name__)
 
 
 @model_sets_bp.get('/targets')
-@jwt_required()
+@require_session
 @cache.cached(timeout=300, query_string=True)
 def list_targets():
     """Return distinct target exam values across all model sets, plus defaults."""
@@ -39,7 +38,7 @@ def list_targets():
 
 
 @model_sets_bp.get('')
-@jwt_required()
+@require_session
 @cache.cached(timeout=300, query_string=True)
 def list_model_sets():
     tab    = request.args.get('tab', 'all')
@@ -69,7 +68,7 @@ def list_model_sets():
 
 
 @model_sets_bp.get('/<int:mid>')
-@jwt_required()
+@require_session
 @cache.cached(timeout=300, make_cache_key=cache_key_with_user)
 def get_model_set(mid: int):
     ms = ModelSet.query.get(mid)
@@ -171,7 +170,7 @@ def delete_model_set(mid: int):
 
 
 @model_sets_bp.post('/<int:mid>/attempts')
-@jwt_required()
+@require_session
 def submit_attempt(mid: int):
     ms = ModelSet.query.get(mid)
     if not ms:
@@ -193,7 +192,7 @@ def submit_attempt(mid: int):
 
 
 @model_sets_bp.get('/<int:mid>/attempts/me')
-@jwt_required()
+@require_session
 @cache.cached(timeout=300, make_cache_key=cache_key_with_user)
 def my_attempts(mid: int):
     attempts = ModelSetAttempt.query.filter_by(
@@ -239,7 +238,7 @@ def sync_google_results(mid: int):
 
 
 @model_sets_bp.get('/<int:mid>/results/me')
-@jwt_required()
+@require_session
 def my_result(mid: int):
     ms = ModelSet.query.get(mid)
     if not ms:

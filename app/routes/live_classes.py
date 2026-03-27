@@ -1,10 +1,9 @@
 """Live Classes Blueprint."""
 from flask import Blueprint, request
-from flask_jwt_extended import jwt_required
 from app import db
 from app.models import LiveClass, LiveClassAttendance, LiveClassMessage
 from app.utils.response import ok, created, not_found, paginate
-from app.utils.jwt_helper import admin_required, current_user_id
+from app.utils.jwt_helper import admin_required, current_user_id, require_session
 from app.utils.cache_helper import cache_key_with_user
 from app import cache
 from datetime import datetime
@@ -14,7 +13,7 @@ live_classes_bp = Blueprint('live_classes', __name__)
 
 
 @live_classes_bp.get('')
-@jwt_required()
+@require_session
 @cache.cached(timeout=300, query_string=True)
 def list_classes():
     status = request.args.get('status', '')
@@ -39,7 +38,7 @@ def list_classes():
 
 
 @live_classes_bp.get('/<int:cid>')
-@jwt_required()
+@require_session
 @cache.cached(timeout=300)
 def get_class(cid: int):
     cls = LiveClass.query.get(cid)
@@ -85,7 +84,7 @@ def update_class(cid: int):
 
 
 @live_classes_bp.post('/<int:cid>/join')
-@jwt_required()
+@require_session
 def join_class(cid: int):
     cls = LiveClass.query.get(cid)
     if not cls:
@@ -103,7 +102,7 @@ def join_class(cid: int):
 
 
 @live_classes_bp.get('/attendance/me')
-@jwt_required()
+@require_session
 @cache.cached(timeout=300, make_cache_key=cache_key_with_user)
 def my_attendance():
     records = LiveClassAttendance.query.filter_by(user_id=current_user_id()).all()
@@ -111,7 +110,7 @@ def my_attendance():
 
 
 @live_classes_bp.get('/<int:cid>/messages')
-@jwt_required()
+@require_session
 @cache.cached(timeout=30, make_cache_key=cache_key_with_user)
 def get_messages(cid: int):
     # Verify the class exists
