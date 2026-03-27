@@ -103,14 +103,8 @@ def complete_onboarding():
         text = str(value).strip()
         return text[:max_len]
 
-    target_exams = data.get('target_exams') or []
-    if not isinstance(target_exams, list):
-        target_exams = []
-    clean_exams = []
-    for exam in target_exams:
-        text = _clean_text(exam, 80)
-        if text and text not in clean_exams:
-            clean_exams.append(text)
+    # Product decision (temporary): onboarding target exam is restricted to Bridge Course only.
+    clean_exams = ['Bridge Course']
     onboarding_payload = {
         'previous_school': _clean_text(data.get('previous_school'), 200),
         'location': _clean_text(data.get('location'), 120),
