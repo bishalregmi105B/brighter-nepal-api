@@ -217,3 +217,41 @@ def google_forms_oauth_callback():
     _upsert_setting(GOOGLE_FORMS_SETTING_KEYS['refresh_token'], refresh_token)
     db.session.commit()
     return redirect(_frontend_settings_url(google_oauth='success'))
+
+
+# ── Chat Settings ─────────────────────────────────────────────────────────────
+_CHAT_SETTING_KEYS = ['chat_rate_limit_count', 'chat_rate_limit_window_secs']
+_CHAT_DEFAULTS = {'chat_rate_limit_count': 20, 'chat_rate_limit_window_secs': 60}
+
+
+@settings_bp.get('/chat')
+@admin_required
+def get_chat_settings():
+    rows = PlatformSetting.query.filter(PlatformSetting.key.in_(_CHAT_SETTING_KEYS)).all()
+    db_vals = {r.key: r.value for r in rows}
+    return ok({
+        'chat_rate_limit_count': int(db_vals.get('chat_rate_limit_count') or _CHAT_DEFAULTS['chat_rate_limit_count']),
+        'chat_rate_limit_window_secs': int(db_vals.get('chat_rate_limit_window_secs') or _CHAT_DEFAULTS['chat_rate_limit_window_secs']),
+    })
+
+
+@settings_bp.patch('/chat')
+@admin_required
+def update_chat_settings():
+    payload = request.get_json(silent=True) or {}
+    updated = []
+    for key in _CHAT_SETTING_KEYS:
+        if key in payload:
+            val = payload[key]
+            try:
+                int_val = int(val)
+                if int_val < 0:
+                    return error(f'{key} must be >= 0')
+            except (TypeError, ValueError):
+                return error(f'{key} must be a number')
+            _upsert_setting(key, str(int_val))
+            updated.append(key)
+    if not updated:
+        return error('No valid fields provided')
+    db.session.commit()
+    return get_chat_settings()
