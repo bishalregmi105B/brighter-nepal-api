@@ -23,8 +23,9 @@ timeout = 60            # kill worker if request takes > 60s
 graceful_timeout = 30   # give 30s for in-flight requests to finish on reload
 keepalive = 5           # keep connection alive for 5s for subsequent requests
 
-# Binding
-bind = '0.0.0.0:5000'
+# Binding — Render (and most PaaS) inject $PORT dynamically
+import os as _os
+bind = f"0.0.0.0:{_os.environ.get('PORT', '5000')}"
 
 # Logging
 accesslog = '-'         # stdout

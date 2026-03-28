@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: brighter-nepal-api
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn -c gunicorn.conf.py run:app
+    plan: free
+    envVars:
+      - key: SECRET_KEY
+        sync: false
+      - key: JWT_SECRET_KEY
+        sync: false
+      - key: DATABASE_URI
+        sync: false        # postgresql://user:pass@host/dbname?sslmode=require
+      - key: FRONTEND_URL
+        sync: false        # https://your-frontend.vercel.app
+      - key: GOOGLE_FORMS_CLIENT_ID
+        sync: false
+      - key: GOOGLE_FORMS_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_FORMS_REFRESH_TOKEN
+        sync: false
+      - key: URL_CIPHER_KEY
+        sync: false
+      - key: PYTHON_VERSION
+        value: 3.11.0
