@@ -8,17 +8,18 @@ class Config:
     JWT_SECRET_KEY        = os.getenv('JWT_SECRET_KEY', 'jwt-change-me')
     SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URI', 'sqlite:///brighter_nepal.db')
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    JWT_ACCESS_TOKEN_EXPIRES = False  # Changed from 604800 (7 days) for practically infinite duration
+    # Tokens expire after 30 days — prevents stale sessions accumulating forever
+    JWT_ACCESS_TOKEN_EXPIRES = int(os.getenv('JWT_EXPIRY_SECONDS', '2592000'))  # 30 days
     FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
 
-    # SQLAlchemy Connection Pool — critical for MySQL under load
-    # Without this, SQLAlchemy defaults to 5 connections (instantly saturated under load)
+    # SQLAlchemy Connection Pool — tuned for 4 vCPU / 8 GB VPS
+    # 4 gevent workers × pool_size(20) = 80 persistent + overflow = 120 max
     SQLALCHEMY_ENGINE_OPTIONS = {
-        'pool_size':       int(os.getenv('DB_POOL_SIZE', '30')),      # 30 persistent connections
-        'max_overflow':    int(os.getenv('DB_MAX_OVERFLOW', '60')),   # 60 burst connections = 90 max total
-        'pool_timeout':    int(os.getenv('DB_POOL_TIMEOUT', '30')),   # wait up to 30s for a free connection
-        'pool_recycle':    int(os.getenv('DB_POOL_RECYCLE', '1800')), # recycle connections every 30 min
-        'pool_pre_ping':   True,  # ping before reuse – detects stale/dropped connections
+        'pool_size':       int(os.getenv('DB_POOL_SIZE', '20')),
+        'max_overflow':    int(os.getenv('DB_MAX_OVERFLOW', '10')),
+        'pool_timeout':    int(os.getenv('DB_POOL_TIMEOUT', '30')),
+        'pool_recycle':    int(os.getenv('DB_POOL_RECYCLE', '1800')),
+        'pool_pre_ping':   True,
     }
 
     # Response compression — reduces payload sizes by 60-80% for JSON responses

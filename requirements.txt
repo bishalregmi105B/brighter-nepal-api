@@ -6,7 +6,8 @@ flask-jwt-extended==4.6.0
 werkzeug==3.0.3
 python-dotenv==1.0.1
 gunicorn==21.2.0
+gevent>=25.0.0
 Flask-Caching
-redis
+redis==5.0.4
 Flask-Limiter
 flask-compress

@@ -1,36 +1,37 @@
 """
 Gunicorn production config for brighter-nepal-api.
+Optimised for 4 vCPU / 8 GB RAM VPS.
 Run: gunicorn -c gunicorn.conf.py run:app
 """
 import multiprocessing
-
-# Workers: (2 × CPU cores) + 1 is the standard formula
-workers = multiprocessing.cpu_count() * 2 + 1
-
-# Use sync worker — best for I/O-bound Flask with SQLAlchemy
-worker_class = 'sync'
-
-# Each worker handles up to 1000 simultaneous connections in queue
-backlog = 1000
-
-# Max number of requests a worker serves before being recycled
-# Prevents memory leaks in long-running workers
-max_requests = 1000
-max_requests_jitter = 100   # stagger recycling so not all die at once
-
-# Timeouts
-timeout = 60            # kill worker if request takes > 60s
-graceful_timeout = 30   # give 30s for in-flight requests to finish on reload
-keepalive = 5           # keep connection alive for 5s for subsequent requests
-
-# Binding — Render (and most PaaS) inject $PORT dynamically
 import os as _os
+
+# ── Worker strategy ────────────────────────────────────────────────────────
+# gevent lets each worker handle thousands of concurrent I/O-bound requests
+# instead of blocking one-request-per-worker like the sync class.
+worker_class = 'gevent'
+workers = int(_os.environ.get('WEB_CONCURRENCY', min(4, multiprocessing.cpu_count())))
+worker_connections = 2000         # max greenlets per worker
+
+# ── Connection queue ───────────────────────────────────────────────────────
+backlog = 2048
+
+# ── Worker recycling (prevents slow memory leaks) ─────────────────────────
+max_requests = 2000
+max_requests_jitter = 200
+
+# ── Timeouts ───────────────────────────────────────────────────────────────
+timeout = 60
+graceful_timeout = 30
+keepalive = 5
+
+# ── Binding ────────────────────────────────────────────────────────────────
 bind = f"0.0.0.0:{_os.environ.get('PORT', '5000')}"
 
-# Logging
-accesslog = '-'         # stdout
-errorlog  = '-'         # stderr
-loglevel  = 'warning'   # only warnings/errors in production (not info spam)
+# ── Logging ────────────────────────────────────────────────────────────────
+accesslog = '-'
+errorlog  = '-'
+loglevel  = 'warning'
 
-# Pre-load app to share memory and detect startup errors early
+# Pre-load app so all workers share the same memory footprint
 preload_app = True
