@@ -103,8 +103,8 @@ def complete_onboarding():
         text = str(value).strip()
         return text[:max_len]
 
-    # Product decision (temporary): onboarding target exam is restricted to Bridge Course only.
-    clean_exams = ['Bridge Course']
+    # Product decision (temporary): onboarding target exam is restricted to SEE Preparation only.
+    clean_exams = ['SEE Preparation']
     onboarding_payload = {
         'previous_school': _clean_text(data.get('previous_school'), 200),
         'location': _clean_text(data.get('location'), 120),

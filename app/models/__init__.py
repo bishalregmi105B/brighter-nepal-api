@@ -22,7 +22,7 @@ class User(db.Model):
     student_id     = db.Column(db.String(6), unique=True, nullable=True, default=None)  # 6-digit login ID
     name           = db.Column(db.String(120), nullable=False)
     email          = db.Column(db.String(120), unique=True, nullable=False)
-    password_hash  = db.Column(db.String(256), nullable=False)
+    password_hash  = db.Column(db.String(512), nullable=False)
     plain_password = db.Column(db.String(100), nullable=True, default=None)  # stored for admin visibility
     whatsapp       = db.Column(db.String(30), nullable=True, default=None)   # WhatsApp number
     paid_amount    = db.Column(db.Integer, nullable=True, default=None)      # amount paid (NPR)
@@ -40,7 +40,7 @@ class User(db.Model):
     device_count   = db.Column(db.Integer, default=0)
 
     def set_password(self, pw: str):
-        self.password_hash  = generate_password_hash(pw)
+        self.password_hash  = generate_password_hash(pw, method='pbkdf2:sha256')
         self.plain_password = pw  # keep plain copy for admin
     def check_password(self, pw: str):  return check_password_hash(self.password_hash, pw)
 

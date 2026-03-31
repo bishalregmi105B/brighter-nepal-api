@@ -255,3 +255,31 @@ def update_chat_settings():
         return error('No valid fields provided')
     db.session.commit()
     return get_chat_settings()
+
+
+# ── Subject Management ────────────────────────────────────────────────────────
+_SUBJECTS_KEY = 'custom_subjects'
+
+
+@settings_bp.get('/subjects')
+@admin_required
+def get_subjects():
+    setting = PlatformSetting.query.filter_by(key=_SUBJECTS_KEY).first()
+    subjects = json.loads(setting.value) if setting and setting.value else []
+    return ok(subjects)
+
+
+@settings_bp.put('/subjects')
+@admin_required
+def update_subjects():
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, list):
+        return error('Expected a list of subject strings')
+    cleaned = []
+    for s in payload:
+        val = str(s).strip()
+        if val and val not in cleaned:
+            cleaned.append(val)
+    _upsert_setting(_SUBJECTS_KEY, json.dumps(cleaned, ensure_ascii=False))
+    db.session.commit()
+    return ok(cleaned)
